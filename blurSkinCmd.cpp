@@ -506,16 +506,20 @@ MStatus blurSkinCmd::getSoftSelection() {
         if (component.isNull() || (component.apiType() != MFn::kMeshVertComponent)) {
             // do on all vertices
             meshPath_.extendToShape();
-
-            MFnMesh meshFn(meshPath_, &stat);  // this is the visible mesh
-            MIntArray ObjVertices;
-            int nbVertices = meshFn.numVertices(&stat);
-            for (int i = 0; i < nbVertices; i++) ObjVertices.append(i);
-            MFnSingleIndexedComponent allVertices;
-            component = allVertices.create(MFn::kMeshVertComponent);
-            allVertices.addElements(ObjVertices);
+            useAllVertices();
         }
     }
+    return MS::kSuccess;
+}
+MStatus blurSkinCmd::useAllVertices() {
+    MStatus stat;
+    MFnMesh meshFn(meshPath_, &stat);  // this is the visible mesh
+    MIntArray ObjVertices;
+    int nbVertices = meshFn.numVertices(&stat);
+    for (int i = 0; i < nbVertices; i++) ObjVertices.append(i);
+    MFnSingleIndexedComponent allVertices;
+    component = allVertices.create(MFn::kMeshVertComponent);
+    allVertices.addElements(ObjVertices);
     return MS::kSuccess;
 }
 
@@ -673,16 +677,20 @@ MStatus blurSkinCmd::doIt(const MArgList& args) {
         getSoftSelection();
         status = findSkinCluster(meshPath_, skinCluster_, indSkinCluster_, verbose);
     } else {
-        // build array of vertices with weight
-        MFnSingleIndexedComponent theVertices;
-        component = theVertices.create(MFn::kMeshVertComponent);
-        theVertices.addElements(indicesVertices_);
+        if (indicesVertices_.length() == 0) {
+            useAllVertices();
+        } else {
+            // build array of vertices with weight
+            MFnSingleIndexedComponent theVertices;
+            component = theVertices.create(MFn::kMeshVertComponent);
+            theVertices.addElements(indicesVertices_);
 
-        MFnComponent componentFn(component);
-        for (unsigned int i = 0; i < indicesVertices_.length(); i++) {
-            MWeight wght = componentFn.weight(i);
-            wght.setInfluence(weightVertices_[i]);
-            componentFn.setWeight(i, wght);
+            MFnComponent componentFn(component);
+            for (unsigned int i = 0; i < indicesVertices_.length(); i++) {
+                MWeight wght = componentFn.weight(i);
+                wght.setInfluence(weightVertices_[i]);
+                componentFn.setWeight(i, wght);
+            }
         }
     }
     executeAction();

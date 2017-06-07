@@ -65,6 +65,7 @@ class blurSkinCmd : public MPxCommand {
     void verboseSetWeights(int currentVertex);
     MStatus getListLockJoints();
     MStatus getAllWeights();
+    MStatus useAllVertices();
     MStatus executeAction();
     MStatus printWeigth(int vertex);
     MStatus getSoftSelection();
