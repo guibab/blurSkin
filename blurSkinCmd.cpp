@@ -436,6 +436,9 @@ MStatus blurSkinCmd::addWeights(int currentVertex) {
             }
         }
     }
+    // it we're trying to set an absolute of wrong value returns !!
+    if (otherJointsTotal == 0. && command_ == kCommandAbsolute) return MS::kSuccess;
+
     // now do the setting of the values ---------------------------
     // ------------------------------------------------------------
     double newVal;
