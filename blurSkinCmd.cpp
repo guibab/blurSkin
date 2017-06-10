@@ -416,6 +416,7 @@ MStatus blurSkinCmd::addWeights(int currentVertex) {
     double otherJointsTotal = 0.0;
     int posi, j;
 
+    int nbAbsolute = 0;
     // get the totals of the weights ------------------------------
     // ------------------------------------------------------------
     for (j = 0; j < nbJoints; j++) {
@@ -428,6 +429,7 @@ MStatus blurSkinCmd::addWeights(int currentVertex) {
                     totalOfAdding += value + perJointAddingValues_[j];
                 } else if (command_ == kCommandAbsolute) {
                     totalOfAdding += perJointAddingValues_[j];
+                    nbAbsolute++;
                 } else if (command_ == kCommandPercentage) {
                     totalOfAdding += value * (1 + perJointAddingValues_[j]);
                 }
@@ -436,8 +438,9 @@ MStatus blurSkinCmd::addWeights(int currentVertex) {
             }
         }
     }
-    // it we're trying to set an absolute of wrong value returns !!
-    if (otherJointsTotal == 0. && command_ == kCommandAbsolute) return MS::kSuccess;
+    // it we're trying to set an absolute on only one joint  and nowhere to set the rest!!
+    if (otherJointsTotal == 0. && nbAbsolute == 1 && command_ == kCommandAbsolute)
+        return MS::kSuccess;
 
     // now do the setting of the values ---------------------------
     // ------------------------------------------------------------
