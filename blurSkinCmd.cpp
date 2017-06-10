@@ -439,13 +439,20 @@ MStatus blurSkinCmd::addWeights(int currentVertex) {
         }
     }
     // it we're trying to set an absolute on only one joint  and nowhere to set the rest!!
-    if (otherJointsTotal == 0. && nbAbsolute == 1 && command_ == kCommandAbsolute)
-        return MS::kSuccess;
+    if (command_ == kCommandAbsolute) {
+        if (otherJointsTotal == 0. && nbAbsolute == 1)  // we can't set
+            return MS::kSuccess;
+        /*
+        if (totalOfAdding+ otherJointsTotal != totalWithLocks)
+                totalOfAdding = totalWithLocks - otherJointsTotal;
+        */
+    }
 
     // now do the setting of the values ---------------------------
     // ------------------------------------------------------------
     double newVal;
-    if (totalOfAdding >= totalWithLocks) {
+    if ((totalOfAdding >= totalWithLocks) ||
+        (command_ == kCommandAbsolute && otherJointsTotal == 0.)) {
         // normalize, rest of joints get zero
         double multFactor = totalWithLocks / totalOfAdding;
         for (j = 0; j < nbJoints; j++) {
