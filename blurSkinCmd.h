@@ -58,7 +58,8 @@ class blurSkinCmd : public MPxCommand {
         kCommandAbsolute,
         kCommandPercentage,
         kCommandAverage,
-        kCommandHelp
+        kCommandHelp,
+        kCommandQuery
     };
 
     MStatus doIt(const MArgList&);
@@ -147,6 +148,7 @@ class blurSkinCmd : public MPxCommand {
     MStringArray listJoints_;
     MDoubleArray listJointsValues_;
     MDoubleArray perJointAddingValues_;
+    MIntArray jointsInputIndices_;
 
     MSelectionList selectionList_; /**< Selected command input nodes. */
     CommandMode command_;          // the command type

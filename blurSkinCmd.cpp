@@ -142,6 +142,7 @@ MStatus blurSkinCmd::GatherCommandArguments(const MArgList& args) {
         command_ = kCommandHelp;
         return MS::kSuccess;
     }
+
     // get the type of the command -------------------------------------------------------
     if (argData.isFlagSet(kCommandFlagShort)) {
         MString commandStringName = argData.flagArgumentString(kCommandFlagShort, 0, &status);
@@ -156,7 +157,11 @@ MStatus blurSkinCmd::GatherCommandArguments(const MArgList& args) {
         else if (commandStringName == "average")
             command_ = kCommandAverage;
     }
-
+    // overwrites commands
+    // --------------------------------------------------------------------------
+    if (argData.isFlagSet(kQueryFlagShort)) {
+        command_ = kCommandQuery;
+    }
     // get basic arguments ----------------------------------------------------------------------
     if (argData.isFlagSet(kVerboseFlagShort))
         verbose = argData.flagArgumentBool(kVerboseFlagShort, 0, &status);
@@ -310,11 +315,18 @@ MStatus blurSkinCmd::getListLockJoints() {
     MFnSkinCluster theSkinCluster(skinCluster_);
     theSkinCluster.influenceObjects(listOfJoints, &stat);
     nbJoints = listOfJoints.length();
+    int nbJntsInput = listJoints_.length();
+
     if (verbose) MGlobal::displayInfo(MString("    nbJoints : ") + nbJoints);
 
     // preSet the operation per joint at zero
     for (int i = 0; i < nbJoints; i++) perJointAddingValues_.append(0.0);
+    MStringArray allJointsNames;
+
     for (int i = 0; i < nbJoints; i++) {
+        if (nbJntsInput == 0) {
+            jointsInputIndices_.append(i);
+        };
         MFnDagNode jnt(listOfJoints[i]);
         // jnt = MFnDagNode (listOfJoints[iterator]);
         MPlug lockInfluenceWeightsPlug = jnt.findPlug("lockInfluenceWeights");
@@ -328,17 +340,29 @@ MStatus blurSkinCmd::getListLockJoints() {
         // get the index from the name for our list of joints
         MString jointName = jnt.name();
         int jntIndex = listJoints_.indexOf(jointName);
-        if (jntIndex != -1) {  // if the joint is in the list of joints name
+        if ((jntIndex != -1) &&
+            listJointsValues_.length() > i) {  // if the joint is in the list of joints name
             perJointAddingValues_.set(listJointsValues_[jntIndex], i);
         }
-
         if (verbose) {
             if (isLockInfluenceWeights)
                 MGlobal::displayInfo("    " + jnt.name() + " is Locked ");
             else
                 MGlobal::displayInfo("    " + jnt.name() + " is not Locked ");
         }
+        allJointsNames.append(jointName);
     }
+
+    // set the list of joints -----------------------------------------------
+    if (verbose)
+        MGlobal::displayInfo(MString(" set the list of joints   ... nbJntsInput : ") + nbJntsInput +
+                             MString(" "));
+    for (int j = 0; j < nbJntsInput; ++j) {
+        MString jntInput = listJoints_[j];
+        int indexInRealJoints = allJointsNames.indexOf(jntInput);
+        jointsInputIndices_.append(indexInRealJoints);
+    }
+    if (verbose) MGlobal::displayInfo(" end set the list of joints   ...");
 
     return MS::kSuccess;
 }
@@ -695,8 +719,39 @@ MStatus blurSkinCmd::executeAction() {
     getListLockJoints();
     // 2 get all weights of vertices
     getAllWeights();
+    if (command_ == kCommandQuery) {
+        if (verbose) MGlobal::displayInfo(MString(" ---- QUERY RETURN ----"));
+        int nbVertices = indicesVertices_.length();
+        int index, j, posiToSet;
+        int nbJntsInput = jointsInputIndices_.length();
+        if (verbose) {
+            MString toDisplay = MString("joints indices ");
+            for (int k = 0; k < nbJntsInput; ++k) {
+                j = jointsInputIndices_[k];
+                toDisplay += MString("  ") + j;
+            }
+            MGlobal::displayInfo(toDisplay);
+        }
 
-    if (command_ == kCommandAverage) {
+        //------- now do the setting ----------
+        for (int i = 0; i < nbVertices; ++i) {
+            index = indicesVertices_[i];
+            // for (int j = 0; j<nbJoints; ++j) {
+            for (int k = 0; k < nbJntsInput; ++k) {
+                j = jointsInputIndices_[k];
+                if (j == -1) {
+                    appendToResult(-1.);
+                } else {
+                    posiToSet = index * nbJoints + j;
+                    appendToResult(newWeights[posiToSet]);
+                    // if (perJointAddingValues_[j] != 0) {
+                }
+            }
+        }
+        // appendToResult(1.0);
+        return MS::kSuccess;
+
+    } else if (command_ == kCommandAverage) {
         MDoubleArray averageWeights;
         int index;
         int nbVertices = indicesVertices_.length();
