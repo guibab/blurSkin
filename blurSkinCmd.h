@@ -57,6 +57,7 @@ class blurSkinCmd : public MPxCommand {
         kCommandAdd,
         kCommandAbsolute,
         kCommandPercentage,
+        kCommandAverage,
         kCommandHelp
     };
 

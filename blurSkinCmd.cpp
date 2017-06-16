@@ -81,7 +81,8 @@ void DisplayHelp() {
         "-respectLocks (-rl):         N/A        Respect locks                      default True "
         "\n";
     help += "-command (-c):               N/A        the command action correct inputs are :\n";
-    help += "                                        smooth - add - absolute - percentage\n";
+    help +=
+        "                                        smooth - add - absolute - percentage - average\n";
     help += "-help (-h)                   N/A        Display this text.\n";
     MGlobal::displayInfo(help);
 }
@@ -152,6 +153,8 @@ MStatus blurSkinCmd::GatherCommandArguments(const MArgList& args) {
             command_ = kCommandAbsolute;
         else if (commandStringName == "percentage")
             command_ = kCommandPercentage;
+        else if (commandStringName == "average")
+            command_ = kCommandAverage;
     }
 
     // get basic arguments ----------------------------------------------------------------------
@@ -693,9 +696,32 @@ MStatus blurSkinCmd::executeAction() {
     // 2 get all weights of vertices
     getAllWeights();
 
-    if (isNurbsSurface_) {
+    if (command_ == kCommandAverage) {
+        MDoubleArray averageWeights;
+        int index;
+        int nbVertices = indicesVertices_.length();
+        for (int j = 0; j < nbJoints; j++) {
+            double sumJointWeights = 0;
+            for (int i = 0; i < nbVertices; ++i) {
+                index = indicesVertices_[i];
+                int posiToSet = index * nbJoints + j;
+                sumJointWeights += newWeights[posiToSet];
+            }
+            averageWeights.append(sumJointWeights / nbVertices);
+        }
+        //------- now do the setting ----------
+        for (int i = 0; i < nbVertices; ++i) {
+            for (int j = 0; j < nbJoints; j++) {
+                index = indicesVertices_[i];
+                int posiToSet = index * nbJoints + j;
+                newWeights.set(averageWeights[j], posiToSet);
+            }
+        }
+        currentWeights.copy(newWeights);
+    } else if (isNurbsSurface_) {
         int index, storedU, storedV;
         MIntArray vertices;
+
         for (int r = 0; r < repeat_; r++) {
             if (verbose) MGlobal::displayInfo(MString("repeat nb :") + r);
             for (int i = 0; i < indicesVertices_.length(); ++i) {
