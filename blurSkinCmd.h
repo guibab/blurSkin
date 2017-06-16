@@ -10,9 +10,11 @@
 #include <maya/MFloatPoint.h>
 #include <maya/MFloatPointArray.h>
 #include <maya/MFloatVectorArray.h>
+#include <maya/MFnDoubleIndexedComponent.h>
 #include <maya/MFnIntArrayData.h>
 #include <maya/MFnMesh.h>
 #include <maya/MFnNumericAttribute.h>
+#include <maya/MFnNurbsSurface.h>
 #include <maya/MFnSingleIndexedComponent.h>
 #include <maya/MFnSkinCluster.h>
 #include <maya/MFnTransform.h>
@@ -27,6 +29,7 @@
 #include <maya/MItMeshPolygon.h>
 #include <maya/MItMeshVertex.h>
 #include <maya/MItSelectionList.h>
+#include <maya/MItSurfaceCV.h>
 #include <maya/MMatrix.h>
 #include <maya/MPoint.h>
 #include <maya/MPxCommand.h>
@@ -63,11 +66,12 @@ class blurSkinCmd : public MPxCommand {
     MStatus getAverageWeight(MIntArray vertices, int currentVertex);
     MStatus addWeights(int currentVertex);
     void verboseSetWeights(int currentVertex);
+    void getTypeOfSurface();
     MStatus getListLockJoints();
     MStatus getAllWeights();
     MStatus useAllVertices();
     MStatus executeAction();
-    MStatus printWeigth(int vertex);
+    MStatus printWeigth(int vertex, int u = 0, int v = 0);
     MStatus getSoftSelection();
     bool isUndoable() const;
     static void* creator();
@@ -90,6 +94,9 @@ class blurSkinCmd : public MPxCommand {
 
     const static char* kVerboseFlagShort;
     const static char* kVerboseFlagLong;
+
+    const static char* kListCVsIndicesFlagShort;
+    const static char* kListCVsIndicesFlagLong;
 
     const static char* kListVerticesIndicesFlagShort;
     const static char* kListVerticesIndicesFlagLong;
@@ -130,10 +137,10 @@ class blurSkinCmd : public MPxCommand {
     MObject component;     // the components vertices
     int nbJoints;
 
-    MDoubleArray fullOrigWeights, weigthsForUndo, currentWeights, newWeights;
+    MDoubleArray fullOrigWeights, weigthsForUndo, currentWeights, newWeights, weightsForSetting;
     MIntArray lockJoints, lockVertices;
 
-    MIntArray indicesVertices_;
+    MIntArray indicesVertices_, indicesU_, indicesV_;
     MFloatArray weightVertices_;
 
     MStringArray listJoints_;
@@ -143,7 +150,12 @@ class blurSkinCmd : public MPxCommand {
     MSelectionList selectionList_; /**< Selected command input nodes. */
     CommandMode command_;          // the command type
     bool verbose, respectLocks_;
+    bool isNurbsSurface_, isMeshSurface_, isNurbsCurve_, isBezierCurve_;
     bool useSelection = false;
     int depth_, repeat_, indSkinCluster_;
     double percentMvt_;
+
+    int numCVsInV_, numCVsInU_;
+    int UDeg_, VDeg_;
+    bool UIsPeriodic_, VIsPeriodic_;
 };
