@@ -230,9 +230,7 @@ MStatus blurSkinCmd::GatherCommandArguments(const MArgList& args) {
         if (verbose) MGlobal::displayInfo(toDisplay);
         foundListVerticesIndices = true;
         nbVerts = indicesU_.length();
-    }
-
-    if (argData.isFlagSet(kListVerticesIndicesFlagShort)) {
+    } else if (argData.isFlagSet(kListVerticesIndicesFlagShort)) {
         foundListVerticesIndices = true;
         int nbUse = argData.numberOfFlagUses(kListVerticesIndicesFlagShort);
         MString toDisplay("List Vertices : ");
@@ -792,8 +790,6 @@ MStatus blurSkinCmd::executeAction() {
                     addWeights(index);
                 } else {
                     vertices.clear();
-                    // int minU = storedU, maxU = storedU;
-                    // int minV = storedV, maxV = storedV;
                     /*
                     for (int d = 0; d < depth_; d++) { // <= to add one more
                             CVsAround(storedU, storedV, numCVsInU, numCVsInV, UIsPeriodic,
