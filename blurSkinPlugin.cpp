@@ -1,15 +1,22 @@
 #include <maya/MFnPlugin.h>
 
 #include "blurSkinCmd.h"
+#include "blurSkinEdit.h"
 
 MStatus initializePlugin(MObject obj) {
-    MStatus result;
+    MStatus status;
     MFnPlugin plugin(obj, "blur studios", "1.0", "Any");
 
-    result = plugin.registerCommand("blurSkinCmd", blurSkinCmd::creator, blurSkinCmd::newSyntax);
-    CHECK_MSTATUS_AND_RETURN_IT(result);
+    status = plugin.registerCommand("blurSkinCmd", blurSkinCmd::creator, blurSkinCmd::newSyntax);
+    CHECK_MSTATUS_AND_RETURN_IT(status);
 
-    return result;
+    status = plugin.registerNode("blurSkinDisplay", blurSkinDisplay::id, blurSkinDisplay::creator,
+                                 blurSkinDisplay::initialize);
+    if (!status) {
+        status.perror("registerNode");
+        return (status);
+    }
+    return (status);
 }
 
 MStatus uninitializePlugin(MObject obj) {
@@ -18,5 +25,12 @@ MStatus uninitializePlugin(MObject obj) {
 
     status = plugin.deregisterCommand("blurSkinCmd");
     CHECK_MSTATUS_AND_RETURN_IT(status);
+
+    status = plugin.deregisterNode(blurSkinDisplay::id);
+    if (!status) {
+        status.perror("deregisterNode");
+        return (status);
+    }
+
     return status;
 }

@@ -82,7 +82,8 @@ void DisplayHelp() {
         "\n";
     help += "-command (-c):               N/A        the command action correct inputs are :\n";
     help +=
-        "                                        smooth - add - absolute - percentage - average\n";
+        "                                        smooth - add - absolute - percentage - average - "
+        "colors\n";
     help += "-help (-h)                   N/A        Display this text.\n";
     MGlobal::displayInfo(help);
 }
@@ -156,6 +157,8 @@ MStatus blurSkinCmd::GatherCommandArguments(const MArgList& args) {
             command_ = kCommandPercentage;
         else if (commandStringName == "average")
             command_ = kCommandAverage;
+        else if (commandStringName == "colors")
+            command_ = kCommandSetColors;
     }
     // overwrites commands
     // --------------------------------------------------------------------------
@@ -699,6 +702,24 @@ MStatus blurSkinCmd::useAllVertices() {
     return MS::kSuccess;
 }
 
+MStatus blurSkinCmd::setColors() {
+    MStatus stat;
+
+    MFnMesh meshFn(meshPath_, &stat);  // this is the visible mesh
+
+    int nbVertices = meshFn.numVertices();
+
+    MColorArray theColors;
+    getListColorJoints(skinCluster_, nbVertices, theColors, true);
+
+    MIntArray vertexIndices;
+    vertexIndices.setLength(nbVertices);
+    for (unsigned int i = 0; i < nbVertices; i++) {
+        vertexIndices[i] = i;
+    }
+    meshFn.setVertexColors(theColors, vertexIndices);
+    return stat;
+}
 MStatus blurSkinCmd::executeAction() {
     if (verbose) MGlobal::displayInfo(MString(" ---- executeAction ----"));
     MStatus stat;
@@ -717,7 +738,10 @@ MStatus blurSkinCmd::executeAction() {
     getListLockJoints();
     // 2 get all weights of vertices
     getAllWeights();
-    if (command_ == kCommandQuery) {
+    if (command_ == kCommandSetColors) {
+        if (verbose) MGlobal::displayInfo(MString(" ---- set Colors ----"));
+        setColors();
+    } else if (command_ == kCommandQuery) {
         if (verbose) MGlobal::displayInfo(MString(" ---- QUERY RETURN ----"));
         int nbVertices = indicesVertices_.length();
         int index, j, posiToSet;
@@ -918,12 +942,15 @@ MStatus blurSkinCmd::getAllWeights() {
         MFnNurbsSurface MfnSurface(meshPath_);
         int sizeInV = MfnSurface.numCVsInV();
         int sizeInU = MfnSurface.numCVsInU();
+
         for (int indexU = 0; indexU < sizeInU; sizeInU++) {
                 for (int indexV = 0; indexV < sizeInV; sizeInV++) {
                         allCVs.addElement(indexU, indexV);
                 }
         }
         allVerticesObj = allCVs.create(MFn::kSurfaceCVComponent);
+        allCVs.setCompleteData( sizeInU,  sizeInV);
+
         */
         MItGeometry gIter(meshPath_);
         MDoubleArray wts;

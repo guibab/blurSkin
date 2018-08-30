@@ -59,7 +59,8 @@ class blurSkinCmd : public MPxCommand {
         kCommandPercentage,
         kCommandAverage,
         kCommandHelp,
-        kCommandQuery
+        kCommandQuery,
+        kCommandSetColors
     };
 
     MStatus doIt(const MArgList&);
@@ -73,6 +74,7 @@ class blurSkinCmd : public MPxCommand {
     MStatus getAllWeights();
     MStatus useAllVertices();
     MStatus executeAction();
+    MStatus setColors();
     MStatus printWeigth(int vertex, int u = 0, int v = 0);
     MStatus getSoftSelection();
     bool isUndoable() const;

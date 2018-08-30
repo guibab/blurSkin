@@ -133,3 +133,122 @@ MStatus findMesh(MObject& skinCluster, MDagPath& theMeshPath, bool verbose) {
     }
     return MS::kFailure;
 }
+
+MStatus getListColorJoints(MObject& skinCluster, int nbVertices, MColorArray& currColors,
+                           bool useMPlug) {
+    MStatus stat;
+    MFnDagNode skinClusterDag(skinCluster);
+    /*
+    MDagPathArray  listOfJoints;
+    MFnSkinCluster theSkinCluster(skinCluster);
+    theSkinCluster.influenceObjects(listOfJoints, &stat);
+    int nbJoints = listOfJoints.length();
+
+    // now get the colors per joint ----------------------------------------
+    MStringArray allJointsNames;
+    float color[3];
+    MColorArray jointsColors(nbJoints);
+    for (int i = 0; i < nbJoints; i++) {
+            MFnDagNode jnt(listOfJoints[i]);
+            //jnt = MFnDagNode (listOfJoints[iterator]);
+            MPlug lockInfluenceWeightsPlug = jnt.findPlug("wireColorRGB");
+            //MPlug lockInfluenceWeightsPlug(jnt, MFnDagNode::wireColorRGB);
+
+            color[0] = lockInfluenceWeightsPlug.child(0).asFloat();
+            color[1] = lockInfluenceWeightsPlug.child(1).asFloat();
+            color[2] = lockInfluenceWeightsPlug.child(2).asFloat();
+
+            jointsColors[i] = MColor(color);
+            //MString jointName = jnt.name();
+    }
+    */
+
+    MFnDependencyNode skinClusterDep(skinCluster);
+    MPlug influenceColor_plug = skinClusterDep.findPlug("influenceColor");
+    int nbJoints = influenceColor_plug.numElements();
+    // MGlobal::displayInfo(influenceColor_plug.name() + " - " +nbJoints);
+    MColorArray jointsColors(nbJoints);
+    for (int i = 0; i < nbJoints; ++i) {
+        // weightList[i]
+        MPlug colorPlug = influenceColor_plug.elementByPhysicalIndex(i);
+        // MGlobal::displayInfo(colorPlug.name());
+        float element[4] = {colorPlug.child(0).asFloat(), colorPlug.child(1).asFloat(),
+                            colorPlug.child(2).asFloat(), 1};
+        MGlobal::displayInfo(colorPlug.name() + " " + element[0] + " " + element[1] + " " +
+                             element[2]);
+        jointsColors.set(element, i);
+    }
+
+    if (!useMPlug) {
+        MFnSkinCluster theSkinCluster(skinCluster);
+
+        // now get the weights ----------------------------------------
+        MObject allVerticesObj;
+
+        MFnSingleIndexedComponent allVertices;
+        MDoubleArray fullOrigWeights;
+
+        allVertices.setCompleteData(nbVertices);
+        allVerticesObj = allVertices.create(MFn::kMeshVertComponent);
+        unsigned int infCount;
+
+        MDagPath path;
+        theSkinCluster.getPathAtIndex(0, path);
+        theSkinCluster.getWeights(path, allVerticesObj, fullOrigWeights, infCount);
+
+        // now get the colors per vertices ----------------------------------------
+        int currentWeightsLength = fullOrigWeights.length();
+        int indexInfluence, i, indexWeight;
+        double theWeight, maxWeight;
+
+        currColors.clear();
+        currColors.setLength(nbVertices);
+
+        for (i = 0; i < nbVertices; ++i) {
+            MColor theColor;
+            maxWeight = 0.;
+            for (indexInfluence = 0; indexInfluence < nbJoints; indexInfluence++) {
+                indexWeight = i * nbJoints + indexInfluence;
+                theWeight = fullOrigWeights[indexWeight];
+                if (theWeight > 0.) {
+                    theColor += jointsColors[indexInfluence] * theWeight;
+                }
+                currColors[i] = theColor;
+            }
+        }
+    } else {
+        MPlug weight_list_plug = skinClusterDep.findPlug("weightList");
+        // MGlobal::displayInfo(weight_list_plug.name());
+        int nbElements = weight_list_plug.numElements();
+        currColors.clear();
+        currColors.setLength(nbVertices);
+
+        for (int i = 0; i < nbVertices; ++i) {
+            // weightList[i]
+            // if (i > 50) break;
+            MPlug ith_weights_plug = weight_list_plug.elementByPhysicalIndex(i);
+            int vertexIndex = ith_weights_plug.logicalIndex();
+            // MGlobal::displayInfo(ith_weights_plug.name());
+
+            // weightList[i].weight
+            MPlug plug_weights = ith_weights_plug.child(0);  // access first compound child
+            int nb_weights = plug_weights.numElements();
+            // MGlobal::displayInfo(plug_weights.name() + nb_weights);
+            MColor theColor;
+            for (int j = 0; j < nb_weights; j++) {  // for each joint
+                MPlug weight_plug = plug_weights.elementByPhysicalIndex(j);
+                // weightList[i].weight[j]
+                int indexInfluence = weight_plug.logicalIndex();
+                double theWeight = weight_plug.asDouble();
+                // MGlobal::displayInfo(weight_plug.name() + " " + indexInfluence + " " +
+                // theWeight);
+                if (theWeight > 0.01) {
+                    theColor += jointsColors[indexInfluence] * theWeight;
+                }
+            }
+            currColors[vertexIndex] = theColor;
+        }
+    }
+
+    return MS::kSuccess;
+}
