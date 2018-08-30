@@ -6,6 +6,7 @@
 
 // MAYA HEADER FILES:
 
+#include <maya/MColorArray.h>
 #include <maya/MDagPath.h>
 #include <maya/MDagPathArray.h>
 #include <maya/MFnDagNode.h>
@@ -28,6 +29,8 @@ void CVsAround(int storedU, int storedV, int numCVsInU, int numCVsInV, bool UIsP
 MStatus findSkinCluster(MDagPath MeshPath, MObject& theSkinCluster, int indSkinCluster,
                         bool verbose);
 MStatus findMesh(MObject& theSkinCluster, MDagPath& theMeshPath, bool verbose);
-MStatus getListColorJoints(MObject& skinCluster, int nbVertices, MColorArray& currColors,
-                           bool useMPlug = false);
+MStatus findOrigMesh(MObject& theSkinCluster, MObject& origMesh, bool verbose);
+MStatus getListColors(MObject& skinCluster, int nbVertices, MColorArray& currColors,
+                      bool useMPlug = false);
+MStatus getListColorsJoints(MObject& skinCluster, MColorArray& jointsColors);
 #endif

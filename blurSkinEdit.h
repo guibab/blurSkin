@@ -1,4 +1,5 @@
 #include <math.h>
+#include <maya/MArrayDataBuilder.h>
 #include <maya/MColorArray.h>
 #include <maya/MDagPath.h>
 #include <maya/MDagPathArray.h>
@@ -22,15 +23,22 @@
 #include <maya/MVector.h>
 #include <string.h>
 
+#include <map>
+#include <unordered_map>
+
 class blurSkinDisplay : public MPxNode {
    private:
     // void displayLayerWeights(const SkinLayer &layer);
     void getConnectedSkinCluster();
     MObject skinCluster_;
-    MColorArray currColors;
+    MColorArray currColors, jointsColors;
     MIntArray vertexIndices;
     int init = 0;
     // void resizeVertexIndexes(const unsigned int newSize);
+    std::vector<std::vector<std::pair<int, float>>> skin_weights_;
+
+    // std::vector<  std::vector<  std::pair<  int , float  > > > skin_weights_;
+    MStatus blurSkinDisplay::fillArrayValues(bool doColors = false);
 
    public:
     blurSkinDisplay();
@@ -40,7 +48,7 @@ class blurSkinDisplay : public MPxNode {
     // &affectedPlugs );
     virtual MPlug passThroughToOne(const MPlug& plug) const;
 
-    void get_skinning_weights(MDataBlock& block);
+    void set_skinning_weights(MDataBlock& block);
 
     static void* creator();
     static MStatus initialize();

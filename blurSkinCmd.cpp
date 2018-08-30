@@ -263,7 +263,7 @@ MStatus blurSkinCmd::GatherCommandArguments(const MArgList& args) {
         }
         if (verbose) MGlobal::displayInfo(toDisplay);
     } else if (foundListVerticesIndices) {
-        for (unsigned int i = 0; i < nbVerts; i++) weightVertices_.append(1.0);
+        for (int i = 0; i < nbVerts; i++) weightVertices_.append(1.0);
     }
 
     // get index skinCluster (default 0) -------------------------------------------------------
@@ -706,18 +706,23 @@ MStatus blurSkinCmd::setColors() {
     MStatus stat;
 
     MFnMesh meshFn(meshPath_, &stat);  // this is the visible mesh
-
     int nbVertices = meshFn.numVertices();
 
     MColorArray theColors;
-    getListColorJoints(skinCluster_, nbVertices, theColors, true);
+    getListColors(skinCluster_, nbVertices, theColors, true);
 
     MIntArray vertexIndices;
     vertexIndices.setLength(nbVertices);
     for (unsigned int i = 0; i < nbVertices; i++) {
         vertexIndices[i] = i;
     }
-    meshFn.setVertexColors(theColors, vertexIndices);
+    MObject origMeshObj;
+    findOrigMesh(skinCluster_, origMeshObj, false);
+
+    MFnMesh meshFnOrig(origMeshObj, &stat);  // this is the orig mesh
+    meshFnOrig.setVertexColors(theColors, vertexIndices);
+    meshFnOrig.setDisplayColors(true);
+    meshFn.setDisplayColors(true);
     return stat;
 }
 MStatus blurSkinCmd::executeAction() {
