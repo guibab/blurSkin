@@ -6,6 +6,7 @@ MTypeId blurSkinDisplay::id(0x001226F9);
 
 MObject blurSkinDisplay::_inMesh;
 MObject blurSkinDisplay::_outMesh;
+MObject blurSkinDisplay::_paintableAttr;
 MObject blurSkinDisplay::_s_per_joint_weights;
 MObject blurSkinDisplay::_s_skin_weights;
 
@@ -14,48 +15,67 @@ blurSkinDisplay::~blurSkinDisplay() {}
 // The compute() method does the actual work of the node using the inputs
 MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
     MStatus status;
-    if (plug.attribute() != blurSkinDisplay::_outMesh) {
-        // ignore other outputs
-        return status;
+    if (plug.attribute() == blurSkinDisplay::_outMesh) {
+        MDataHandle inMeshData = dataBlock.inputValue(blurSkinDisplay::_inMesh);
+        MDataHandle outMeshData = dataBlock.outputValue(blurSkinDisplay::_outMesh);
+
+        outMeshData.copy(inMeshData);
+
+        MFnDagNode meshNodeFn(thisMObject());
+        MDagPath meshPath;
+
+        if (skinCluster_ == MObject::kNullObj) {
+            getConnectedSkinCluster();                              // get the skinCluster
+            getListColorsJoints(skinCluster_, this->jointsColors);  // get the joints colors
+            status = fillArrayValues(true);  // get the skin data and all the colors
+            set_skinning_weights(dataBlock);
+        }
+
+        if (skinCluster_ != MObject::kNullObj) {
+            // 1 get the colors
+            meshNodeFn.getPath(meshPath);
+            MFnMesh meshFn(outMeshData.asMesh());
+            int nbVertices = meshFn.numVertices();
+            if (this->vertexIndices.length() != nbVertices) {
+                this->vertexIndices.setLength(nbVertices);
+                for (unsigned int i = 0; i < nbVertices; i++) {
+                    this->vertexIndices[i] = i;
+                }
+                MGlobal::displayInfo(" set COLORS ");  // beginning opening of node
+                meshFn.setVertexColors(this->currColors, this->vertexIndices);
+            }
+            ////////////////////////////////////////////////////////////////
+            // consider painted attribute --------
+            /////////////////////////////////////////////////////////////////
+            MColor white(1, 1, 1);
+            MColorArray theEditColors;
+            theEditColors.copy(this->currColors);
+            // MIntArray theEditVerts;
+
+            MFnDoubleArrayData arrayData;
+            MObject dataObj = dataBlock.inputValue(_paintableAttr).data();
+            arrayData.setObject(dataObj);
+
+            unsigned int length = arrayData.length();
+            std::vector<double> val(length);
+
+            for (unsigned int i = 0; i < length; i++) {
+                double val = arrayData[i];
+                if (val > 0) {
+                    // MGlobal::displayInfo(MString(" paint value ") + i + MString(" - ") + val);
+                    MColor newCol = val * white + (1.0 - val) * this->currColors[i];
+                    theEditColors[i] = newCol;
+                    // theEditColors.append(newCol);
+                    // theEditVerts.append(i);
+                }
+            }
+            meshFn.setVertexColors(theEditColors, this->vertexIndices);
+        }
     }
 
-    MDataHandle inMeshData = dataBlock.inputValue(blurSkinDisplay::_inMesh);
-    MDataHandle outMeshData = dataBlock.outputValue(blurSkinDisplay::_outMesh);
+    //}else if (plug.attribute() == blurSkinDisplay::_s_skin_weights) {
 
-    outMeshData.copy(inMeshData);
-
-    MFnDagNode meshNodeFn(thisMObject());
-    MDagPath meshPath;
-
-    if (skinCluster_ == MObject::kNullObj) {
-        getConnectedSkinCluster();                              // get the skinCluster
-        getListColorsJoints(skinCluster_, this->jointsColors);  // get the joints colors
-        status = fillArrayValues(true);  // get the skin data and all the colors
-        set_skinning_weights(dataBlock);
-    }
-
-    if (skinCluster_ != MObject::kNullObj) {
-        // 1 get the colors
-        meshNodeFn.getPath(meshPath);
-        MFnMesh meshFn(outMeshData.asMesh());
-        int nbVertices = meshFn.numVertices();
-
-        if (this->currColors.length() != nbVertices) {  // beginning opening of node
-            MGlobal::displayInfo(" set COLORS ");
-        }
-        /*
-        MColor yellow(1, 1, 0);
-        this->currColors.setLength(nbVertices);
-        for (unsigned int i = 0; i < nbVertices; i++) {
-                this->currColors[i] = yellow;
-        }
-        */
-        this->vertexIndices.setLength(nbVertices);
-        for (unsigned int i = 0; i < nbVertices; i++) {
-            this->vertexIndices[i] = i;
-        }
-        meshFn.setVertexColors(this->currColors, this->vertexIndices);
-    }
+    //}
     dataBlock.setClean(plug);
 
     return status;
@@ -74,6 +94,7 @@ void blurSkinDisplay::getConnectedSkinCluster() {
         }
         ///////////////////////////////////////////////////////////////////////////
         // now check the connection of the plug -----------------------------------
+        // we do it in maya cmds better
         /*
         MPlug weight_list_plug(thisMObject(), blurSkinDisplay::_s_skin_weights);
         MPlugArray plugs;
@@ -192,6 +213,8 @@ MStatus blurSkinDisplay::initialize() {
     MStatus status;
 
     MFnTypedAttribute meshAttr;
+    MFnTypedAttribute tAttr;
+
     blurSkinDisplay::_inMesh = meshAttr.create("inMesh", "im", MFnMeshData::kMesh, &status);
     meshAttr.setStorable(false);
     meshAttr.setConnectable(true);
@@ -203,6 +226,14 @@ MStatus blurSkinDisplay::initialize() {
     meshAttr.setStorable(false);
     meshAttr.setConnectable(true);
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_outMesh);
+
+    ///////////////////////////////////////////////////////////////////////////
+    // paintable attributes
+    ///////////////////////////////////////////////////////////////////////////
+    blurSkinDisplay::_paintableAttr =
+        tAttr.create("paintAttr", "pa", MFnData::kDoubleArray, &status);
+    meshAttr.setStorable(true);
+    status = blurSkinDisplay::addAttribute(blurSkinDisplay::_paintableAttr);
 
     ///////////////////////////////////////////////////////////////////////////
     // Initialize skin weights multi attributes
@@ -230,7 +261,11 @@ MStatus blurSkinDisplay::initialize() {
     // attributeAffects
     ///////////////////////////////////////////////////////////////////////////
     attributeAffects(blurSkinDisplay::_inMesh, blurSkinDisplay::_outMesh);
+    attributeAffects(blurSkinDisplay::_paintableAttr, blurSkinDisplay::_s_skin_weights);
+    attributeAffects(blurSkinDisplay::_paintableAttr, blurSkinDisplay::_outMesh);
     return status;
+
+    MGlobal::executeCommand("makePaintable -attrType doubleArray blurSkinDisplay paintAttr");
 }
 /*
 MStatus blurSkinDisplay::setDependentsDirty( const MPlug &plugBeingDirtied,

@@ -7,6 +7,7 @@
 #include <maya/MDataHandle.h>
 #include <maya/MFnCompoundAttribute.h>
 #include <maya/MFnDependencyNode.h>
+#include <maya/MFnDoubleArrayData.h>
 #include <maya/MFnMesh.h>
 #include <maya/MFnMeshData.h>
 #include <maya/MFnNumericAttribute.h>
@@ -56,6 +57,7 @@ class blurSkinDisplay : public MPxNode {
 
     static MObject _inMesh;
     static MObject _outMesh;
+    static MObject _paintableAttr;
     static MObject _s_per_joint_weights;
     static MObject _s_skin_weights;
     // http://rodolphe-vaillant.fr/?e=79

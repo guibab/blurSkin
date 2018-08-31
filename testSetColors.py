@@ -1,4 +1,4 @@
-from maya import cmds
+from maya import cmds, mel
 from functools import partial
 """
 inflColors = cmds.listConnections ("skinCluster1.influenceColor", s=True, d=False, p=True, c=True)
@@ -46,11 +46,56 @@ def addColorNode () :
             cmds.connectAttr (bsd+".outMesh", skinConn, f=True)
 
             cmds.evalDeferred  (partial (cmds.connectAttr, bsd+".weightList", skinCluster+".weightList", f=True))
+    return bsd
+
+def enterPaint (bsd) : 
+    nbAtt = cmds.getAttr (bsd+".wl", size=True)
+    val = [0]*nbAtt 
+    cmds.setAttr (bsd+".paintAttr", val, type = "doubleArray")
+    cmds.makePaintable( bsd, "paintAttr")
     
+    msh,=cmds.ls (cmds.listHistory (bsd,af=True, f=True), type="mesh")
+    prt,=cmds.listRelatives (msh, p=True, path=True)
+    
+    cmds.select (prt)
+    mel.eval ( "artSetToolAndSelectAttr( \"artAttrCtx\", \"{0}.paintAttr\" );".format (bsd) );
+    cmds.ArtPaintAttrTool ()
+
+
+def clearPaint (bsd):
+    nbAtt = cmds.getAttr (bsd+".wl", size=True)
+    val = [0]*nbAtt 
+    cmds.setAttr (bsd+".paintAttr", val, type = "doubleArray")
+
 
 setColorsOnJoints ()
 #setColorsOnSel ()
-addColorNode () 
+bsd = addColorNode () 
+enterPaint (bsd)
+
+
+clearPaint (bsd)
+
+
+"""
+bsd = "blurSkinDisplay1"
+
+
+
+
+"""
+
+"""
+
+if not cmds.attributeQuery ("paintAttr2", node = bsd, exists = True):
+    cmds.addAttr( bsd , longName="paintAttr2", dataType="doubleArray")
+    cmds.makePaintable( "blurSkinDisplay", "paintAttr2")
+
+mel.eval ( "artSetToolAndSelectAttr( \"artAttrCtx\", \"{0}.paintAttr2\" );".format (bsd) );
+cmds.ArtPaintAttrTool ()
+
+
+"""
 
 
 """
