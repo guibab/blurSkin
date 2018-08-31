@@ -35,6 +35,7 @@ class blurSkinDisplay : public MPxNode {
     void getConnectedSkinCluster();
     MObject skinCluster_;
     MColorArray currColors, jointsColors;
+
     MIntArray vertexIndices;
     int init = 0;
     bool verbose = false;
@@ -46,6 +47,8 @@ class blurSkinDisplay : public MPxNode {
 
     // std::vector<  std::vector<  std::pair<  int , float  > > > skin_weights_;
     MStatus blurSkinDisplay::fillArrayValues(bool doColors = false);
+
+    std::vector<MIntArray> verticesToColor;
 
    public:
     blurSkinDisplay();

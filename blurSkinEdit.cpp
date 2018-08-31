@@ -49,7 +49,24 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                     this->paintedValues[i] = 0.0;
                 }
                 if (verbose) MGlobal::displayInfo(" set COLORS ");  // beginning opening of node
-                meshFn.setVertexColors(this->currColors, this->vertexIndices);
+
+                // meshFn.setVertexColors(this->currColors, this->vertexIndices);
+                // prepare array of Verts to Color
+                MIntArray VertexCountPerPolygon, fullVvertexList;
+                meshFn.getVertices(VertexCountPerPolygon, fullVvertexList);
+                this->verticesToColor.resize(nbVertices);
+                for (unsigned int i = 0; i < fullVvertexList.length(); i++) {
+                    int vertVal = fullVvertexList[i];
+                    this->verticesToColor[vertVal].append(i);
+                }
+
+                // now setting colors
+                meshFn.createColorSetDataMesh(MString("paintColors"));
+                // meshFn.createColorSetWithName("paintColorsSet");
+                meshFn.setCurrentColorSetName("paintColorsSet");
+                meshFn.setColors(this->currColors);
+                // nowAssignColors
+                meshFn.assignColors(fullVvertexList);
             }
             if (this->applyPaint) {
                 if (verbose) MGlobal::displayInfo("  -- > applyPaint  ");
@@ -58,20 +75,15 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 // consider painted attribute --------
                 /////////////////////////////////////////////////////////////////
 
-                // MIntArray VertexCountPerPolygon, fullVvertexList;
-                // meshFn.getVertices(VertexCountPerPolygon, fullVvertexList);
                 // The setColor/setColors method should be called before the assignColors method
                 /*
                 MIntArray colorIds;
-                MColorArray VertexPerPolygonColors;
                 meshFn.setColors(VertexPerPolygonColors);
                 meshFn.assignColors(colorIds);
                 */
                 /*
-                MStatus setSomeColors	(	const MIntArray & 	colorIds,
-                const MColorArray & 	colorArray,
-                const MString * 	colorSet = NULL
-                )
+                MStatus setSomeColors	(	const MIntArray & 	colorIds,const MColorArray &
+                colorArray,const MString * 	colorSet = NULL)
                 */
                 MColor white(1, 1, 1);
                 MColorArray theEditColors;
@@ -121,7 +133,8 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                     }
                 }
                 // meshFn.setVertexColors(theEditColors, this->vertexIndices);
-                meshFn.setVertexColors(theEditColors, theEditVerts);
+                // meshFn.setVertexColors(theEditColors, theEditVerts);
+                meshFn.setSomeColors(theEditVerts, theEditColors);
 
                 dataBlock.setClean(plug);
             }
@@ -303,7 +316,7 @@ MStatus blurSkinDisplay::initialize() {
     CHECK_MSTATUS(enumAttr.addField("Remove", 1));
     CHECK_MSTATUS(enumAttr.addField("Smooth", 2));
     CHECK_MSTATUS(enumAttr.addField("Percent", 3));
-    CHECK_MSTATUS(enumAttr.addField("TTT", 4));
+    CHECK_MSTATUS(enumAttr.addField("Nothing", 4));
     /*
     CHECK_MSTATUS(enumAttr.addField("CrossArrow", 5));
     CHECK_MSTATUS(enumAttr.addField("Cube", 6));
