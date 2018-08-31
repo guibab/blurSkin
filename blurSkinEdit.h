@@ -5,9 +5,11 @@
 #include <maya/MDagPathArray.h>
 #include <maya/MDataBlock.h>
 #include <maya/MDataHandle.h>
+#include <maya/MDoubleArray.h>
 #include <maya/MFnCompoundAttribute.h>
 #include <maya/MFnDependencyNode.h>
 #include <maya/MFnDoubleArrayData.h>
+#include <maya/MFnEnumAttribute.h>
 #include <maya/MFnMesh.h>
 #include <maya/MFnMeshData.h>
 #include <maya/MFnNumericAttribute.h>
@@ -35,18 +37,22 @@ class blurSkinDisplay : public MPxNode {
     MColorArray currColors, jointsColors;
     MIntArray vertexIndices;
     int init = 0;
+    bool verbose = false;
+
+    MDoubleArray paintedValues;
+
     // void resizeVertexIndexes(const unsigned int newSize);
     std::vector<std::vector<std::pair<int, float>>> skin_weights_;
 
     // std::vector<  std::vector<  std::pair<  int , float  > > > skin_weights_;
     MStatus blurSkinDisplay::fillArrayValues(bool doColors = false);
+    bool applyPaint = false;
 
    public:
     blurSkinDisplay();
     virtual ~blurSkinDisplay();
     virtual MStatus compute(const MPlug& plug, MDataBlock& dataBlock);
-    // virtual MStatus     setDependentsDirty( const MPlug& plugBeingDirtied,MPlugArray
-    // &affectedPlugs );
+    virtual MStatus setDependentsDirty(const MPlug& plugBeingDirtied, MPlugArray& affectedPlugs);
     virtual MPlug passThroughToOne(const MPlug& plug) const;
 
     void set_skinning_weights(MDataBlock& block);
@@ -58,6 +64,10 @@ class blurSkinDisplay : public MPxNode {
     static MObject _inMesh;
     static MObject _outMesh;
     static MObject _paintableAttr;
+    static MObject _clearArray;
+    static MObject _commandAttr;
+    static MObject _influenceAttr;
+
     static MObject _s_per_joint_weights;
     static MObject _s_skin_weights;
     // http://rodolphe-vaillant.fr/?e=79

@@ -1,3 +1,17 @@
+"""
+pth = r'C:\Users\guillaume\Documents\DEV\Maya\cpp\blurSkin\testSetColors.py'
+execFile (pth, globals(),  globals())
+setColorsOnJoints ()
+#setColorsOnSel ()
+bsd = addColorNode () 
+enterPaint (bsd)
+
+
+clearPaint (bsd)
+
+"""
+
+
 from maya import cmds, mel
 from functools import partial
 """
@@ -66,17 +80,6 @@ def clearPaint (bsd):
     nbAtt = cmds.getAttr (bsd+".wl", size=True)
     val = [0]*nbAtt 
     cmds.setAttr (bsd+".paintAttr", val, type = "doubleArray")
-
-
-setColorsOnJoints ()
-#setColorsOnSel ()
-bsd = addColorNode () 
-enterPaint (bsd)
-
-
-clearPaint (bsd)
-
-
 """
 bsd = "blurSkinDisplay1"
 

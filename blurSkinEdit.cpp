@@ -7,6 +7,9 @@ MTypeId blurSkinDisplay::id(0x001226F9);
 MObject blurSkinDisplay::_inMesh;
 MObject blurSkinDisplay::_outMesh;
 MObject blurSkinDisplay::_paintableAttr;
+MObject blurSkinDisplay::_clearArray;
+MObject blurSkinDisplay::_commandAttr;
+MObject blurSkinDisplay::_influenceAttr;
 MObject blurSkinDisplay::_s_per_joint_weights;
 MObject blurSkinDisplay::_s_skin_weights;
 
@@ -16,66 +19,94 @@ blurSkinDisplay::~blurSkinDisplay() {}
 MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
     MStatus status;
     if (plug.attribute() == blurSkinDisplay::_outMesh) {
+        if (verbose) MGlobal::displayInfo(" _outMesh CALL ");  // beginning opening of node
+
         MDataHandle inMeshData = dataBlock.inputValue(blurSkinDisplay::_inMesh);
         MDataHandle outMeshData = dataBlock.outputValue(blurSkinDisplay::_outMesh);
 
-        outMeshData.copy(inMeshData);
-
-        MFnDagNode meshNodeFn(thisMObject());
-        MDagPath meshPath;
+        // MFnDagNode meshNodeFn(thisMObject());
+        // MDagPath meshPath;
 
         if (skinCluster_ == MObject::kNullObj) {
+            outMeshData.copy(inMeshData);  // copy the mesh
+
             getConnectedSkinCluster();                              // get the skinCluster
             getListColorsJoints(skinCluster_, this->jointsColors);  // get the joints colors
             status = fillArrayValues(true);  // get the skin data and all the colors
             set_skinning_weights(dataBlock);
         }
-
         if (skinCluster_ != MObject::kNullObj) {
             // 1 get the colors
-            meshNodeFn.getPath(meshPath);
+            // meshNodeFn.getPath(meshPath);
             MFnMesh meshFn(outMeshData.asMesh());
             int nbVertices = meshFn.numVertices();
             if (this->vertexIndices.length() != nbVertices) {
                 this->vertexIndices.setLength(nbVertices);
+                // init the paint attr
+                this->paintedValues.setLength(nbVertices);
                 for (unsigned int i = 0; i < nbVertices; i++) {
                     this->vertexIndices[i] = i;
+                    this->paintedValues[i] = 0.0;
                 }
-                MGlobal::displayInfo(" set COLORS ");  // beginning opening of node
+                if (verbose) MGlobal::displayInfo(" set COLORS ");  // beginning opening of node
                 meshFn.setVertexColors(this->currColors, this->vertexIndices);
             }
-            ////////////////////////////////////////////////////////////////
-            // consider painted attribute --------
-            /////////////////////////////////////////////////////////////////
-            MColor white(1, 1, 1);
-            MColorArray theEditColors;
-            theEditColors.copy(this->currColors);
-            // MIntArray theEditVerts;
+            if (applyPaint) {
+                if (verbose) MGlobal::displayInfo("  -- > applyPaint  ");
+                applyPaint = false;
+                ////////////////////////////////////////////////////////////////
+                // consider painted attribute --------
+                /////////////////////////////////////////////////////////////////
 
-            MFnDoubleArrayData arrayData;
-            MObject dataObj = dataBlock.inputValue(_paintableAttr).data();
-            arrayData.setObject(dataObj);
+                // MIntArray VertexCountPerPolygon, fullVvertexList;
+                // meshFn.getVertices(VertexCountPerPolygon, fullVvertexList);
+                // The setColor/setColors method should be called before the assignColors method
+                /*
+                MIntArray colorIds;
+                MColorArray VertexPerPolygonColors;
+                meshFn.setColors(VertexPerPolygonColors);
+                meshFn.assignColors(colorIds);
+                */
+                /*
+                MStatus setSomeColors	(	const MIntArray & 	colorIds,
+                const MColorArray & 	colorArray,
+                const MString * 	colorSet = NULL
+                )
+                */
+                MColor white(1, 1, 1);
+                MColorArray theEditColors;
+                MIntArray theEditVerts;
+                // theEditColors.copy(this->currColors);
 
-            unsigned int length = arrayData.length();
-            std::vector<double> val(length);
+                // read paint values ---------------------------
+                MFnDoubleArrayData arrayData;
+                MObject dataObj = dataBlock.inputValue(_paintableAttr).data();
+                arrayData.setObject(dataObj);
 
-            for (unsigned int i = 0; i < length; i++) {
-                double val = arrayData[i];
-                if (val > 0) {
-                    // MGlobal::displayInfo(MString(" paint value ") + i + MString(" - ") + val);
-                    MColor newCol = val * white + (1.0 - val) * this->currColors[i];
-                    theEditColors[i] = newCol;
-                    // theEditColors.append(newCol);
-                    // theEditVerts.append(i);
+                unsigned int length = arrayData.length();
+                for (unsigned int i = 0; i < length; i++) {
+                    double val = arrayData[i];
+                    if (val > 0) {
+                        if (val != this->paintedValues[i]) {
+                            // MGlobal::displayInfo(MString(" paint value ") + i + MString(" - ") +
+                            // val);
+                            MColor newCol = val * white + (1.0 - val) * this->currColors[i];
+                            // theEditColors[i] = newCol;
+                            theEditColors.append(newCol);
+                            theEditVerts.append(i);
+                            this->paintedValues[i] = val;
+                        }
+                    }
                 }
+                // meshFn.setVertexColors(theEditColors, this->vertexIndices);
+                meshFn.setVertexColors(theEditColors, theEditVerts);
+
+                dataBlock.setClean(plug);
             }
-            meshFn.setVertexColors(theEditColors, this->vertexIndices);
         }
+    } else if (plug.attribute() == blurSkinDisplay::_s_skin_weights) {
+        // MGlobal::displayInfo(" _s_skin_weights CALL ");
     }
-
-    //}else if (plug.attribute() == blurSkinDisplay::_s_skin_weights) {
-
-    //}
     dataBlock.setClean(plug);
 
     return status;
@@ -160,7 +191,7 @@ MStatus blurSkinDisplay::fillArrayValues(bool doColors) {
         }
         if (doColors) currColors[i] = theColor;
     }
-    MGlobal::displayInfo(" FILLED ARRAY VALUES ");
+    if (verbose) MGlobal::displayInfo(" FILLED ARRAY VALUES ");
 
     return status;
 }
@@ -214,6 +245,7 @@ MStatus blurSkinDisplay::initialize() {
 
     MFnTypedAttribute meshAttr;
     MFnTypedAttribute tAttr;
+    MFnNumericAttribute numAtt;
 
     blurSkinDisplay::_inMesh = meshAttr.create("inMesh", "im", MFnMeshData::kMesh, &status);
     meshAttr.setStorable(false);
@@ -235,10 +267,49 @@ MStatus blurSkinDisplay::initialize() {
     meshAttr.setStorable(true);
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_paintableAttr);
 
+    blurSkinDisplay::_clearArray =
+        numAtt.create("clearArray", "ca", MFnNumericData::kBoolean, false, &status);
+    status = blurSkinDisplay::addAttribute(blurSkinDisplay::_clearArray);
+
+    ///////////////////////////////////////////////////////////////////////////
+    // creation attributes
+    ///////////////////////////////////////////////////////////////////////////
+    MFnEnumAttribute enumAttr;
+
+    blurSkinDisplay::_commandAttr = enumAttr.create("command", "cmd", 0);
+    CHECK_MSTATUS(enumAttr.addField("Add", 0));
+    CHECK_MSTATUS(enumAttr.addField("Remove", 1));
+    CHECK_MSTATUS(enumAttr.addField("Smooth", 2));
+    CHECK_MSTATUS(enumAttr.addField("Percent", 3));
+    CHECK_MSTATUS(enumAttr.addField("TTT", 4));
+    /*
+    CHECK_MSTATUS(enumAttr.addField("CrossArrow", 5));
+    CHECK_MSTATUS(enumAttr.addField("Cube", 6));
+    CHECK_MSTATUS(enumAttr.addField("CubeWithPeak", 7));
+    CHECK_MSTATUS(enumAttr.addField("Cylinder", 8));
+    CHECK_MSTATUS(enumAttr.addField("Diamond", 9));
+    CHECK_MSTATUS(enumAttr.addField("Flower", 10));
+    CHECK_MSTATUS(enumAttr.addField("Jaw", 11));
+    CHECK_MSTATUS(enumAttr.addField("Null", 12));
+    CHECK_MSTATUS(enumAttr.addField("Pyramid", 13));
+    CHECK_MSTATUS(enumAttr.addField("Sphere", 14));
+    CHECK_MSTATUS(enumAttr.addField("Spine", 15));
+    CHECK_MSTATUS(enumAttr.addField("Square", 16));
+    */
+    CHECK_MSTATUS(enumAttr.setStorable(true));
+    CHECK_MSTATUS(enumAttr.setKeyable(true));
+    CHECK_MSTATUS(enumAttr.setReadable(true));
+    CHECK_MSTATUS(enumAttr.setWritable(true));
+    CHECK_MSTATUS(enumAttr.setCached(false));
+
+    status = blurSkinDisplay::addAttribute(blurSkinDisplay::_commandAttr);
+
+    blurSkinDisplay::_influenceAttr =
+        numAtt.create("influenceIndex", "ii", MFnNumericData::kInt, 0, &status);
+    status = blurSkinDisplay::addAttribute(blurSkinDisplay::_influenceAttr);
     ///////////////////////////////////////////////////////////////////////////
     // Initialize skin weights multi attributes
     ///////////////////////////////////////////////////////////////////////////
-    MFnNumericAttribute numAtt;
     _s_per_joint_weights = numAtt.create("weights", "w", MFnNumericData::kDouble, 0.0, &status);
     numAtt.setKeyable(false);
     numAtt.setArray(true);
@@ -257,37 +328,34 @@ MStatus blurSkinDisplay::initialize() {
     cmpAttr.setUsesArrayDataBuilder(true);
     addAttribute(_s_skin_weights);
 
+    cmpAttr.setStorable(true);  // To be stored during file-save
+
     ///////////////////////////////////////////////////////////////////////////
     // attributeAffects
     ///////////////////////////////////////////////////////////////////////////
     attributeAffects(blurSkinDisplay::_inMesh, blurSkinDisplay::_outMesh);
+    // attributeAffects(blurSkinDisplay::_paintableAttr, blurSkinDisplay::_fakeAttr);
     attributeAffects(blurSkinDisplay::_paintableAttr, blurSkinDisplay::_s_skin_weights);
-    attributeAffects(blurSkinDisplay::_paintableAttr, blurSkinDisplay::_outMesh);
+    // attributeAffects(blurSkinDisplay::_paintableAttr, blurSkinDisplay::_outMesh);
     return status;
 
     MGlobal::executeCommand("makePaintable -attrType doubleArray blurSkinDisplay paintAttr");
 }
-/*
-MStatus blurSkinDisplay::setDependentsDirty( const MPlug &plugBeingDirtied,
-        MPlugArray &affectedPlugs )
-{
+MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
+                                            MPlugArray& affectedPlugs) {
     MStatus status;
     MObject thisNode = thisMObject();
-    MFnDependencyNode fnThisNode( thisNode );
-    if ( plugBeingDirtied.partialName() == "A" ) {
-        // "A" is dirty, so mark "B" dirty if "B" exists.
-        // This implements the relationship "A blurSkinDisplay B".
-        //
-        fprintf(stderr,"blurSkinDisplay::setDependentsDirty, \"A\" being dirtied\n");
-        MPlug pB = fnThisNode.findPlug( "B", &status );
-        if ( MStatus::kSuccess == status ) {
-            fprintf(stderr,"\t\t... dirtying \"B\"\n");
-            CHECK_MSTATUS( affectedPlugs.append( pB ) );
-        }
+    MFnDependencyNode fnThisNode(thisNode);
+    if (plugBeingDirtied == _paintableAttr) {
+        // MGlobal::displayInfo(" _paintableAttr dirty ");// paint attr changed
+
+        // fprintf(stderr,"blurSkinDisplay::setDependentsDirty, \"A\" being dirtied\n");
+        MPlug outMeshPlug(thisNode, blurSkinDisplay::_outMesh);
+        affectedPlugs.append(outMeshPlug);
+        applyPaint = true;
     }
-    return( MS::kSuccess );
+    return (MS::kSuccess);
 }
 // These methods load and unload the plugin, registerNode registers the
 // new node type with maya
 //
-*/
