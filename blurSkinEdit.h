@@ -31,6 +31,8 @@
 
 class blurSkinDisplay : public MPxNode {
    private:
+    bool verbose = false;
+
     // void displayLayerWeights(const SkinLayer &layer);
     void getConnectedSkinCluster();
     MObject skinCluster_;
@@ -38,9 +40,9 @@ class blurSkinDisplay : public MPxNode {
 
     MIntArray vertexIndices;
     int init = 0;
-    bool verbose = false;
-    bool applyPaint = false, clearTheArray = false;
+    bool applyPaint = false, clearTheArray = false, reloadCommand = true;
     MDoubleArray paintedValues;
+    int influenceIndex = -1, commandIndex = 0;
 
     // void resizeVertexIndexes(const unsigned int newSize);
     std::vector<std::vector<std::pair<int, float>>> skin_weights_;

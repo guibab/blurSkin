@@ -44,7 +44,7 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 this->vertexIndices.setLength(nbVertices);
                 // init the paint attr
                 this->paintedValues.setLength(nbVertices);
-                for (unsigned int i = 0; i < nbVertices; i++) {
+                for (int i = 0; i < nbVertices; i++) {
                     this->vertexIndices[i] = i;
                     this->paintedValues[i] = 0.0;
                 }
@@ -68,32 +68,36 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 // nowAssignColors
                 meshFn.assignColors(fullVvertexList);
             }
-            if (this->applyPaint) {
+            if (this->reloadCommand) {
+                if (verbose) MGlobal::displayInfo(" reloadCommand  ");
+                MDataHandle commandData = dataBlock.inputValue(_commandAttr);
+                MDataHandle influenceData = dataBlock.inputValue(_influenceAttr);
+                this->influenceIndex = influenceData.asInt();
+                this->commandIndex = commandData.asInt();
+                if (verbose)
+                    MGlobal::displayInfo(MString(" commandeIndex  ") + this->commandIndex + " - ");
+                if (verbose)
+                    MGlobal::displayInfo(MString(" influenceIndex ") + this->influenceIndex +
+                                         " - ");
+
+                this->reloadCommand = false;
+                this->applyPaint = false;
+            } else if (this->applyPaint) {
                 if (verbose) MGlobal::displayInfo("  -- > applyPaint  ");
                 this->applyPaint = false;
+
                 ////////////////////////////////////////////////////////////////
                 // consider painted attribute --------
                 /////////////////////////////////////////////////////////////////
-
-                // The setColor/setColors method should be called before the assignColors method
-                /*
-                MIntArray colorIds;
-                meshFn.setColors(VertexPerPolygonColors);
-                meshFn.assignColors(colorIds);
-                */
-                /*
-                MStatus setSomeColors	(	const MIntArray & 	colorIds,const MColorArray &
-                colorArray,const MString * 	colorSet = NULL)
-                */
-                MColor white(1, 1, 1);
+                MColor multColor(1, 1, 1);
+                if (influenceIndex > -1) multColor = this->jointsColors[influenceIndex];
                 MColorArray theEditColors;
                 MIntArray theEditVerts;
-                // theEditColors.copy(this->currColors);
 
                 // read paint values ---------------------------
                 if (this->clearTheArray) {
                     this->clearTheArray = false;
-                    MDataHandle clearArrayData = dataBlock.inputValue(blurSkinDisplay::_clearArray);
+                    MDataHandle clearArrayData = dataBlock.inputValue(_clearArray);
                     bool clearArrayVal = clearArrayData.asBool();
                     if (verbose) {
                         MString strVal = "False";
@@ -107,10 +111,9 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                                 theEditVerts.append(i);
                             }
                         }
-                        MPlug clearArrayPlug(thisMObject(), blurSkinDisplay::_clearArray);
+                        MPlug clearArrayPlug(thisMObject(), _clearArray);
                         clearArrayPlug.setBool(false);
                     }
-
                 } else {
                     MFnDoubleArrayData arrayData;
                     MObject dataObj = dataBlock.inputValue(_paintableAttr).data();
@@ -122,17 +125,15 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                         if (val > 0) {
                             if (val != this->paintedValues[i]) {
                                 // MGlobal::displayInfo(MString(" paint value ") + i + MString(" -
-                                // ") + val);
-                                MColor newCol = val * white + (1.0 - val) * this->currColors[i];
-                                // theEditColors[i] = newCol;
-                                theEditColors.append(newCol);
+                                // ") + val); theEditColors[i] = newCol;
+                                theEditColors.append(val * multColor +
+                                                     (1.0 - val) * this->currColors[i]);
                                 theEditVerts.append(i);
                                 this->paintedValues[i] = val;
                             }
                         }
                     }
                 }
-                // meshFn.setVertexColors(theEditColors, this->vertexIndices);
                 // meshFn.setVertexColors(theEditColors, theEditVerts);
                 meshFn.setSomeColors(theEditVerts, theEditColors);
 
@@ -236,11 +237,11 @@ void blurSkinDisplay::set_skinning_weights(MDataBlock& block) {
     MArrayDataHandle array_hdl = block.outputArrayValue(_s_skin_weights, &status);
     MArrayDataBuilder array_builder = array_hdl.builder(&status);
 
-    int nbVerts = skin_weights_.size();
+    auto nbVerts = skin_weights_.size();
     // array_builder.growArray(nbVerts);
-    for (unsigned i = 0; i < nbVerts; i++) {
+    for (int i = 0; i < nbVerts; i++) {
         auto vertexWeight = skin_weights_[i];
-        int nbInfluences = vertexWeight.size();
+        auto nbInfluences = vertexWeight.size();
 
         // MArrayDataHandle infLuenceWeight_hdl = array_builder.addElementArray(i);
         // MArrayDataBuilder weight_list_builder = infLuenceWeight_hdl.builder(&status);
@@ -254,7 +255,7 @@ void blurSkinDisplay::set_skinning_weights(MDataBlock& block) {
         // weight_list_builder.growArray(nbInfluences);		no need we do addElement
 
         // Scan array, update existing element, remove unsused ones
-        for (unsigned j = 0; j < nbInfluences; ++j) {
+        for (int j = 0; j < nbInfluences; ++j) {
             auto myPair = skin_weights_[i][j];
             int index = myPair.first;
             float val = myPair.second;
@@ -315,7 +316,7 @@ MStatus blurSkinDisplay::initialize() {
     CHECK_MSTATUS(enumAttr.addField("Add", 0));
     CHECK_MSTATUS(enumAttr.addField("Remove", 1));
     CHECK_MSTATUS(enumAttr.addField("Smooth", 2));
-    CHECK_MSTATUS(enumAttr.addField("Percent", 3));
+    CHECK_MSTATUS(enumAttr.addField("Sharpen", 3));
     CHECK_MSTATUS(enumAttr.addField("Nothing", 4));
     /*
     CHECK_MSTATUS(enumAttr.addField("CrossArrow", 5));
@@ -340,7 +341,8 @@ MStatus blurSkinDisplay::initialize() {
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_commandAttr);
 
     blurSkinDisplay::_influenceAttr =
-        numAtt.create("influenceIndex", "ii", MFnNumericData::kInt, 0, &status);
+        numAtt.create("influenceIndex", "ii", MFnNumericData::kInt64, 0, &status);
+    numAtt.setMin(0);
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_influenceAttr);
     ///////////////////////////////////////////////////////////////////////////
     // Initialize skin weights multi attributes
@@ -381,10 +383,12 @@ MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
     MStatus status;
     MObject thisNode = thisMObject();
     MFnDependencyNode fnThisNode(thisNode);
-    if ((plugBeingDirtied == _paintableAttr) || (plugBeingDirtied == _clearArray)) {
-        if (plugBeingDirtied == _clearArray) this->clearTheArray = true;
-        this->applyPaint = true;
+    this->reloadCommand =
+        ((plugBeingDirtied == _commandAttr) || (plugBeingDirtied == _influenceAttr));
+    this->clearTheArray = (plugBeingDirtied == _clearArray);
 
+    if ((plugBeingDirtied == _paintableAttr) || this->reloadCommand || this->clearTheArray) {
+        this->applyPaint = true;
         MPlug outMeshPlug(thisNode, blurSkinDisplay::_outMesh);
         affectedPlugs.append(outMeshPlug);
     }
