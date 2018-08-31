@@ -38,7 +38,7 @@ class blurSkinDisplay : public MPxNode {
     MIntArray vertexIndices;
     int init = 0;
     bool verbose = false;
-
+    bool applyPaint = false, clearTheArray = false;
     MDoubleArray paintedValues;
 
     // void resizeVertexIndexes(const unsigned int newSize);
@@ -46,7 +46,6 @@ class blurSkinDisplay : public MPxNode {
 
     // std::vector<  std::vector<  std::pair<  int , float  > > > skin_weights_;
     MStatus blurSkinDisplay::fillArrayValues(bool doColors = false);
-    bool applyPaint = false;
 
    public:
     blurSkinDisplay();

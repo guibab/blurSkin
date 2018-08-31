@@ -51,9 +51,9 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 if (verbose) MGlobal::displayInfo(" set COLORS ");  // beginning opening of node
                 meshFn.setVertexColors(this->currColors, this->vertexIndices);
             }
-            if (applyPaint) {
+            if (this->applyPaint) {
                 if (verbose) MGlobal::displayInfo("  -- > applyPaint  ");
-                applyPaint = false;
+                this->applyPaint = false;
                 ////////////////////////////////////////////////////////////////
                 // consider painted attribute --------
                 /////////////////////////////////////////////////////////////////
@@ -79,22 +79,44 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 // theEditColors.copy(this->currColors);
 
                 // read paint values ---------------------------
-                MFnDoubleArrayData arrayData;
-                MObject dataObj = dataBlock.inputValue(_paintableAttr).data();
-                arrayData.setObject(dataObj);
+                if (this->clearTheArray) {
+                    this->clearTheArray = false;
+                    MDataHandle clearArrayData = dataBlock.inputValue(blurSkinDisplay::_clearArray);
+                    bool clearArrayVal = clearArrayData.asBool();
+                    if (verbose) {
+                        MString strVal = "False";
+                        if (clearArrayVal) strVal = "True";
+                        MGlobal::displayInfo("  -- > clearArrayVal   " + strVal);
+                    }
+                    if (clearArrayVal) {
+                        for (unsigned int i = 0; i < this->paintedValues.length(); i++) {
+                            if (this->paintedValues[i] != 0) {
+                                theEditColors.append(this->currColors[i]);
+                                theEditVerts.append(i);
+                            }
+                        }
+                        MPlug clearArrayPlug(thisMObject(), blurSkinDisplay::_clearArray);
+                        clearArrayPlug.setBool(false);
+                    }
 
-                unsigned int length = arrayData.length();
-                for (unsigned int i = 0; i < length; i++) {
-                    double val = arrayData[i];
-                    if (val > 0) {
-                        if (val != this->paintedValues[i]) {
-                            // MGlobal::displayInfo(MString(" paint value ") + i + MString(" - ") +
-                            // val);
-                            MColor newCol = val * white + (1.0 - val) * this->currColors[i];
-                            // theEditColors[i] = newCol;
-                            theEditColors.append(newCol);
-                            theEditVerts.append(i);
-                            this->paintedValues[i] = val;
+                } else {
+                    MFnDoubleArrayData arrayData;
+                    MObject dataObj = dataBlock.inputValue(_paintableAttr).data();
+                    arrayData.setObject(dataObj);
+
+                    unsigned int length = arrayData.length();
+                    for (unsigned int i = 0; i < length; i++) {
+                        double val = arrayData[i];
+                        if (val > 0) {
+                            if (val != this->paintedValues[i]) {
+                                // MGlobal::displayInfo(MString(" paint value ") + i + MString(" -
+                                // ") + val);
+                                MColor newCol = val * white + (1.0 - val) * this->currColors[i];
+                                // theEditColors[i] = newCol;
+                                theEditColors.append(newCol);
+                                theEditVerts.append(i);
+                                this->paintedValues[i] = val;
+                            }
                         }
                     }
                 }
@@ -346,13 +368,12 @@ MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
     MStatus status;
     MObject thisNode = thisMObject();
     MFnDependencyNode fnThisNode(thisNode);
-    if (plugBeingDirtied == _paintableAttr) {
-        // MGlobal::displayInfo(" _paintableAttr dirty ");// paint attr changed
+    if ((plugBeingDirtied == _paintableAttr) || (plugBeingDirtied == _clearArray)) {
+        if (plugBeingDirtied == _clearArray) this->clearTheArray = true;
+        this->applyPaint = true;
 
-        // fprintf(stderr,"blurSkinDisplay::setDependentsDirty, \"A\" being dirtied\n");
         MPlug outMeshPlug(thisNode, blurSkinDisplay::_outMesh);
         affectedPlugs.append(outMeshPlug);
-        applyPaint = true;
     }
     return (MS::kSuccess);
 }

@@ -75,11 +75,15 @@ def enterPaint (bsd) :
     mel.eval ( "artSetToolAndSelectAttr( \"artAttrCtx\", \"{0}.paintAttr\" );".format (bsd) );
     cmds.ArtPaintAttrTool ()
 
+    cmds.artAttrCtx( cmds.currentCtx(), edit=True, outline=True, colorfeedback = False)
 
 def clearPaint (bsd):
-    nbAtt = cmds.getAttr (bsd+".wl", size=True)
     val = [0]*nbAtt 
     cmds.setAttr (bsd+".paintAttr", val, type = "doubleArray")
+    cmds.setAttr (bsd+".clearArray", 1)
+
+    cmds.evalDeferred (partial (cmds.setAttr ,bsd+".clearArray", 1))
+
 """
 bsd = "blurSkinDisplay1"
 
