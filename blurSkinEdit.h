@@ -35,19 +35,19 @@ class blurSkinDisplay : public MPxNode {
     bool init = true;
 
     // void displayLayerWeights(const SkinLayer &layer);
-    void getConnectedSkinCluster();
     MObject skinCluster_;
     MColorArray currColors, jointsColors;
     MDoubleArray paintedValues;
 
     bool applyPaint = false, clearTheArray = false, reloadCommand = true;
     int influenceIndex = -1, commandIndex = 0;
-
+    int nbJoints = 0;
     // void resizeVertexIndexes(const unsigned int newSize);
     std::vector<std::vector<std::pair<int, float>>> skin_weights_;
+    MDoubleArray skinWeightList;
 
-    // std::vector<  std::vector<  std::pair<  int , float  > > > skin_weights_;
     MStatus blurSkinDisplay::fillArrayValues(bool doColors = false);
+    void getConnectedSkinCluster();
 
    public:
     blurSkinDisplay();
@@ -57,7 +57,7 @@ class blurSkinDisplay : public MPxNode {
     virtual MPlug passThroughToOne(const MPlug& plug) const;
 
     void set_skinning_weights(MDataBlock& block);
-
+    void replace_weights(MDataBlock& block, MIntArray& theVertices, MDoubleArray& theWeights);
     static void* creator();
     static MStatus initialize();
     static MTypeId id;

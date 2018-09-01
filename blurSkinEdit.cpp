@@ -98,6 +98,7 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 } else {
                     // read paint values ---------------------------
                     MFnDoubleArrayData arrayData;
+                    MDoubleArray verticesWeight;
                     MObject dataObj = dataBlock.inputValue(_paintableAttr).data();
                     arrayData.setObject(dataObj);
 
@@ -106,14 +107,24 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                         double val = arrayData[i];
                         if (val > 0) {
                             if (val != this->paintedValues[i]) {
+                                theEditVerts.append(i);
+                                verticesWeight.append(val);
                                 // MGlobal::displayInfo(MString(" paint value ") + i + MString(" -
                                 // ") + val);
                                 theEditColors.append(val * multColor +
                                                      (1.0 - val) * this->currColors[i]);
-                                theEditVerts.append(i);
-                                this->paintedValues[i] = val;
+                                this->paintedValues[i] = val;  // store to not repaint
                             }
                         }
+                    }
+                    // Here the magic of changing weights happens
+                    // -------------------------------------------------
+                    if (commandIndex < 2) {
+                        MDoubleArray theWeights(this->nbJoints * theEditVerts.length(), 0.0);
+                        status = editArray(commandIndex, influenceIndex, this->nbJoints,
+                                           this->skinWeightList, theEditVerts, verticesWeight,
+                                           theWeights);
+                        replace_weights(dataBlock, theEditVerts, theWeights);
                     }
                 }
                 // meshFn.setVertexColors(theEditColors, theEditVerts);
@@ -170,14 +181,18 @@ MStatus blurSkinDisplay::fillArrayValues(bool doColors) {
     MFnDependencyNode skinClusterDep(skinCluster_);
 
     MPlug weight_list_plug = skinClusterDep.findPlug("weightList");
+    MPlug matrix_plug = skinClusterDep.findPlug("matrix");
     // MGlobal::displayInfo(weight_list_plug.name());
     int nbElements = weight_list_plug.numElements();
+    nbJoints = matrix_plug.numElements();
 
     skin_weights_.resize(nbElements);
     if (doColors) {
         currColors.clear();
         currColors.setLength(nbElements);
     }
+    this->skinWeightList = MDoubleArray(nbElements * nbJoints, 0.0);
+
     for (int i = 0; i < nbElements; ++i) {
         // weightList[i]
         MPlug ith_weights_plug = weight_list_plug.elementByPhysicalIndex(i);
@@ -198,9 +213,8 @@ MStatus blurSkinDisplay::fillArrayValues(bool doColors) {
             double theWeight = weight_plug.asDouble();
 
             skin_weights_[i][j] = std::make_pair(indexInfluence, theWeight);
-
+            this->skinWeightList[vertexIndex * nbJoints + indexInfluence] = theWeight;
             if (doColors) theColor += jointsColors[indexInfluence] * theWeight;
-
             /*
             //get Value
             auto myPair = skin_weights_[i][j];
@@ -238,11 +252,63 @@ void blurSkinDisplay::set_skinning_weights(MDataBlock& block) {
             float val = myPair.second;
 
             MDataHandle hdl = weight_list_builder.addElement(index, &status);
-            hdl.setDouble((double)val);
+            // hdl.setDouble((double)val);
+            double theWeight = this->skinWeightList[i * nbJoints + index];
+            hdl.setDouble(theWeight);
         }
         weight_list_hdl.set(weight_list_builder);
     }
     array_hdl.set(array_builder);
+}
+
+void blurSkinDisplay::replace_weights(MDataBlock& block, MIntArray& theVertices,
+                                      MDoubleArray& theWeights) {
+    MStatus status = MS::kSuccess;
+    MArrayDataHandle array_hdl = block.outputArrayValue(_s_skin_weights, &status);
+    for (int i = 0; i < theVertices.length(); ++i) {
+        int indexVertex = theVertices[i];
+        array_hdl.jumpToArrayElement(indexVertex);
+        // weightList[i]
+        MDataHandle element_hdl = array_hdl.outputValue(&status);
+        // weightList[i].weight
+        MDataHandle child = element_hdl.child(_s_per_joint_weights);
+
+        MArrayDataHandle weight_list_hdl(child, &status);
+        MArrayDataBuilder weight_list_builder = weight_list_hdl.builder(&status);
+
+        unsigned handle_count = weight_list_hdl.elementCount(&status);
+        unsigned builder_count = weight_list_builder.elementCount(&status);
+        // mayaAssert(builder_count == handle_count);
+
+        MIntArray to_remove;
+        // Scan array, update existing element, remove unsused ones
+        for (unsigned j = 0; j < handle_count; ++j) {
+            // weightList[i].weight[j]
+            // weight_list_hdl.jumpToArrayElement(j);
+            unsigned index = weight_list_hdl.elementIndex(&status);
+
+            double weight = theWeights[i * this->nbJoints + index];
+            if (weight == 0.0)
+                to_remove.append(index);
+            else {
+                MDataHandle hdl = weight_list_hdl.outputValue(&status);
+                hdl.setDouble(weight);
+                theWeights[i * this->nbJoints + index] = 0.0;
+            }
+            weight_list_hdl.next();
+        }
+        for (int k = 0; k < to_remove.length(); ++k)
+            weight_list_builder.removeElement(to_remove[k]);
+        // add the missing
+        for (unsigned j = 0; j < this->nbJoints; ++j) {
+            double weight = theWeights[i * this->nbJoints + j];
+            if (weight != 0.0) {
+                MDataHandle hdl = weight_list_builder.addElement(j, &status);
+                hdl.setDouble(weight);
+            }
+        }
+        weight_list_hdl.set(weight_list_builder);
+    }
 }
 
 MPlug blurSkinDisplay::passThroughToOne(const MPlug& plug) const {
@@ -291,6 +357,8 @@ MStatus blurSkinDisplay::initialize() {
     blurSkinDisplay::_commandAttr = enumAttr.create("command", "cmd", 0);
     CHECK_MSTATUS(enumAttr.addField("Add", 0));
     CHECK_MSTATUS(enumAttr.addField("Remove", 1));
+    CHECK_MSTATUS(enumAttr.addField("AddPercent", 2));
+    CHECK_MSTATUS(enumAttr.addField("Absolute", 3));
     CHECK_MSTATUS(enumAttr.addField("Smooth", 2));
     CHECK_MSTATUS(enumAttr.addField("Sharpen", 3));
     CHECK_MSTATUS(enumAttr.addField("Nothing", 4));

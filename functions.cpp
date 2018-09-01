@@ -275,3 +275,34 @@ MStatus getListColors(MObject& skinCluster, int nbVertices, MColorArray& currCol
 
     return MS::kSuccess;
 }
+
+MStatus editArray(int command, int influence, int nbJoints, MDoubleArray& fullWeightArray,
+                  MIntArray& vertices, MDoubleArray& verticesWeight, MDoubleArray& theWeights) {
+    MStatus stat;
+    // do the add --------------------------
+    for (int i = 0; i < vertices.length(); ++i) {
+        int theVert = vertices[i];
+        double theVal = verticesWeight[i];
+
+        double currentW = fullWeightArray[theVert * nbJoints + influence];
+        double newW = currentW + theVal;  // DO ADD -------
+        if (newW > 1.0) newW = 1.0;
+        double newRest = 1.0 - newW;
+        double oldRest = 1.0 - currentW;
+        double div = oldRest / newRest;
+
+        for (int j = 0; j < nbJoints; ++j) {
+            if (j != influence) {
+                if (newW == 1.0)
+                    fullWeightArray[theVert * nbJoints + j] = 0.0;
+                else {
+                    fullWeightArray[theVert * nbJoints + j] /= div;
+                }
+            } else
+                fullWeightArray[theVert * nbJoints + influence] = newW;
+
+            theWeights[i * nbJoints + j] = fullWeightArray[theVert * nbJoints + j];
+        }
+    }
+    return stat;
+}

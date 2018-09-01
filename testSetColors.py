@@ -4,6 +4,9 @@ execfile (pth, globals(),  globals())
 setColorsOnJoints ()
 #setColorsOnSel ()
 bsd = addColorNode () 
+cmds.setAttr( bsd+".influenceIndex", 10)
+
+
 enterPaint (bsd)
 
 
