@@ -17,14 +17,36 @@ MObject blurSkinDisplay::_s_skin_weights;
 blurSkinDisplay::blurSkinDisplay() {}
 blurSkinDisplay::~blurSkinDisplay() {}
 
-// The compute() method does the actual work of the node using the inputs
+MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
+    MStatus status;
+
+    if (verbose) MGlobal::displayInfo(" reloadCommand  ");
+    MDataHandle commandData = dataBlock.inputValue(_commandAttr);
+    MDataHandle influenceData = dataBlock.inputValue(_influenceAttr);
+    MDataHandle postSettingData = dataBlock.inputValue(_postSetting);
+    this->influenceIndex = influenceData.asInt();
+    this->commandIndex = commandData.asInt();
+    this->postSetting = postSettingData.asBool();
+
+    if (verbose) MGlobal::displayInfo(MString(" commandeIndex  ") + this->commandIndex + " - ");
+    if (verbose) MGlobal::displayInfo(MString(" influenceIndex ") + this->influenceIndex + " - ");
+
+    this->reloadCommand = false;
+    this->applyPaint = false;
+
+    return status;
+}
+
 MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
     MStatus status;
+
     if (plug.attribute() == blurSkinDisplay::_outMesh) {
         if (verbose) MGlobal::displayInfo(" _outMesh CALL ");  // beginning opening of node
 
         MDataHandle inMeshData = dataBlock.inputValue(blurSkinDisplay::_inMesh);
         MDataHandle outMeshData = dataBlock.outputValue(blurSkinDisplay::_outMesh);
+
+        if (this->reloadCommand) getAttributes(dataBlock);
 
         if (skinCluster_ == MObject::kNullObj) {
             outMeshData.copy(inMeshData);  // copy the mesh
@@ -33,7 +55,9 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
             getListColorsJoints(skinCluster_, this->jointsColors);  // get the joints colors
             status = fillArrayValues(true);   // get the skin data and all the colors
             set_skinning_weights(dataBlock);  // set the skin data and all the colors
+            getAttributes(dataBlock);         // for too fast a start
         }
+
         if (skinCluster_ != MObject::kNullObj) {
             // 1 get the colors
             MObject outMesh = outMeshData.asMesh();
@@ -56,24 +80,6 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
 
                 // get connected vertices --------------------
                 getConnectedVertices(outMesh, nbVertices);
-            }
-            if (this->reloadCommand) {
-                if (verbose) MGlobal::displayInfo(" reloadCommand  ");
-                MDataHandle commandData = dataBlock.inputValue(_commandAttr);
-                MDataHandle influenceData = dataBlock.inputValue(_influenceAttr);
-                MDataHandle postSettingData = dataBlock.inputValue(_postSetting);
-                this->influenceIndex = influenceData.asInt();
-                this->commandIndex = commandData.asInt();
-                this->postSetting = postSettingData.asBool();
-
-                if (verbose)
-                    MGlobal::displayInfo(MString(" commandeIndex  ") + this->commandIndex + " - ");
-                if (verbose)
-                    MGlobal::displayInfo(MString(" influenceIndex ") + this->influenceIndex +
-                                         " - ");
-
-                this->reloadCommand = false;
-                this->applyPaint = false;
             } else if (this->applyPaint) {
                 if (verbose) MGlobal::displayInfo("  -- > applyPaint  ");
                 this->applyPaint = false;
@@ -82,16 +88,17 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 // consider painted attribute --------
                 /////////////////////////////////////////////////////////////////
                 MColor multColor(1, 1, 1);
-                float intensity = .8;
+                float intensity = 1.0;
                 // 0 Add - 1 Remove - 2 AddPercent - 3 Absolute - 4 Smooth - 5 Sharpen - 6 Colors
 
                 if ((commandIndex < 4) && (influenceIndex > -1))
                     multColor = this->jointsColors[influenceIndex];
                 else
-                    intensity = .5;
+                    intensity = .7;
 
                 MColorArray theEditColors;
                 MIntArray theEditVerts;
+                MDoubleArray verticesWeight;
 
                 if (this->clearTheArray) {
                     this->clearTheArray = false;
@@ -107,15 +114,21 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                             if (this->paintedValues[i] != 0) {
                                 theEditColors.append(this->currColors[i]);
                                 theEditVerts.append(i);
+                                verticesWeight.append(this->paintedValues[i]);
+                                this->paintedValues[i] = 0.0;
                             }
                         }
+                        // post brushing apply values
+                        // ---------------------------------------------------
+                        if (this->postSetting)
+                            applyCommand(dataBlock, theEditVerts, verticesWeight);
+
                         MPlug clearArrayPlug(thisMObject(), _clearArray);
                         clearArrayPlug.setBool(false);
                     }
                 } else {
                     // read paint values ---------------------------
                     MFnDoubleArrayData arrayData;
-                    MDoubleArray verticesWeight;
                     MObject dataObj = dataBlock.inputValue(_paintableAttr).data();
                     arrayData.setObject(dataObj);
 
@@ -123,7 +136,8 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                     for (unsigned int i = 0; i < length; i++) {
                         double val = arrayData[i];
                         if (val > 0) {
-                            if (val != this->paintedValues[i]) {
+                            if (val !=
+                                this->paintedValues[i]) {  // only if other zone painted ----------
                                 val = std::max(0.0, std::min(val, 1.0));  // clamp
                                 theEditVerts.append(i);
                                 verticesWeight.append(val);
@@ -137,39 +151,9 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                             }
                         }
                     }
-                    // Here the magic of changing weights happens
-                    // -------------------------------------------------
-                    if (!this->postSetting) {
-                        if ((commandIndex == 0) || (commandIndex == 4)) {
-                            MDoubleArray theWeights(this->nbJoints * theEditVerts.length(), 0.0);
-                            if (commandIndex == 4) {
-                                for (int i = 0; i < theEditVerts.length(); ++i) {
-                                    int theVert = theEditVerts[i];
-                                    double theVal = verticesWeight[i];
-
-                                    MIntArray vertsAround = this->connectedVertices[theVert];
-                                    status = setAverageWeight(vertsAround, theVert, i,
-                                                              this->nbJoints, this->lockJoints,
-                                                              this->skinWeightList, theWeights);
-                                }
-                            } else {
-                                status = editArray(commandIndex, influenceIndex, this->nbJoints,
-                                                   this->skinWeightList, theEditVerts,
-                                                   verticesWeight, theWeights);
-                            }
-                            // now set the weights
-                            for (int i = 0; i < theEditVerts.length(); ++i) {
-                                int theVert = theEditVerts[i];
-                                for (int j = 0; j < nbJoints; ++j) {
-                                    this->skinWeightList[theVert * nbJoints + j] =
-                                        verticesWeight[i] * theWeights[i * nbJoints + j] +
-                                        (1.0 - verticesWeight[i]) *
-                                            this->skinWeightList[theVert * nbJoints + j];
-                                }
-                            }
-                            replace_weights(dataBlock, theEditVerts, theWeights);
-                        }
-                    }
+                    // during brushing apply values
+                    // ---------------------------------------------------
+                    if (!this->postSetting) applyCommand(dataBlock, theEditVerts, verticesWeight);
                 }
                 // meshFn.setVertexColors(theEditColors, theEditVerts);
                 meshFn.setSomeColors(theEditVerts, theEditColors);
@@ -183,6 +167,38 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
     }*/
     dataBlock.setClean(plug);
 
+    return status;
+}
+
+MStatus blurSkinDisplay::applyCommand(MDataBlock& dataBlock, MIntArray& theEditVerts,
+                                      MDoubleArray& verticesWeight) {
+    MStatus status;
+    if ((commandIndex == 0) || (commandIndex == 4)) {
+        MDoubleArray theWeights(this->nbJoints * theEditVerts.length(), 0.0);
+        if (commandIndex == 4) {
+            for (int i = 0; i < theEditVerts.length(); ++i) {
+                int theVert = theEditVerts[i];
+                double theVal = verticesWeight[i];
+
+                MIntArray vertsAround = this->connectedVertices[theVert];
+                status = setAverageWeight(vertsAround, theVert, i, this->nbJoints, this->lockJoints,
+                                          this->skinWeightList, theWeights);
+            }
+        } else {
+            status = editArray(commandIndex, influenceIndex, this->nbJoints, this->skinWeightList,
+                               theEditVerts, verticesWeight, theWeights);
+        }
+        // now set the weights
+        for (int i = 0; i < theEditVerts.length(); ++i) {
+            int theVert = theEditVerts[i];
+            for (int j = 0; j < nbJoints; ++j) {
+                this->skinWeightList[theVert * nbJoints + j] =
+                    verticesWeight[i] * theWeights[i * nbJoints + j] +
+                    (1.0 - verticesWeight[i]) * this->skinWeightList[theVert * nbJoints + j];
+            }
+        }
+        replace_weights(dataBlock, theEditVerts, theWeights);
+    }
     return status;
 }
 

@@ -45,7 +45,7 @@ class blurSkinDisplay : public MPxNode {
 
     MIntArray lockJoints, lockVertices;
     bool applyPaint = false, clearTheArray = false, reloadCommand = true, postSetting = true;
-    int influenceIndex = -1, commandIndex = 0;
+    int influenceIndex = 0, commandIndex = 0;
     int nbJoints = 0;
 
     // void resizeVertexIndexes(const unsigned int newSize);
@@ -55,6 +55,9 @@ class blurSkinDisplay : public MPxNode {
 
     MStatus blurSkinDisplay::fillArrayValues(bool doColors = false);
     void getConnectedSkinCluster();
+    MStatus getAttributes(MDataBlock& dataBlock);
+    MStatus applyCommand(MDataBlock& dataBlock, MIntArray& theEditVerts,
+                         MDoubleArray& verticesWeight);
 
    public:
     blurSkinDisplay();
