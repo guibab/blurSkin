@@ -8,15 +8,13 @@ cmds.setAttr( bsd+".influenceIndex", 10)
 
 
 enterPaint (bsd)
-
-
-clearPaint (bsd)
+deleteTheJobs (toSearch = "function CallAfterPaint")
 
 """
 
-
 from maya import cmds, mel
 from functools import partial
+from dcc.maya import createMelProcedure
 """
 inflColors = cmds.listConnections ("skinCluster1.influenceColor", s=True, d=False, p=True, c=True)
 inflColors[1]
@@ -78,14 +76,73 @@ def enterPaint (bsd) :
     mel.eval ( "artSetToolAndSelectAttr( \"artAttrCtx\", \"{0}.paintAttr\" );".format (bsd) );
     cmds.ArtPaintAttrTool ()
 
-    cmds.artAttrCtx( cmds.currentCtx(), edit=True, outline=True, colorfeedback = False)
+    #fcProc = createMelProcedure(finalPaintBrush, [('int','slot')])
+    #import __main__
+    #__main__.applyCallBack = True
+    createScriptJob ()
+    cmds.artAttrCtx( cmds.currentCtx(), edit=True, outline=True, colorfeedback = False,
+    clamp = "both", clamplower = 0.0, clampupper=1.0)#, afterStrokeCmd='print "PAINT"')
+
+def createScriptJob ():
+    theJob = cmds.scriptJob( runOnce=False, attributeChange=[bsd+'.paintAttr', CallAfterPaint] )
+
+def deleteTheJobs (toSearch = "function CallAfterPaint") : 
+    res = cmds.scriptJob(listJobs=True)
+    for job in res :
+        if toSearch in job : 
+            jobIndex = int(job.split(":")[0])
+            cmds.scriptJob(kill = jobIndex)
+
+"""
+class toggleBlockPaintBrush(object):
+    def __init__(self, theVariable = ""):
+        self.theAttr = theVariable
+
+    def __enter__(self):
+        import __main__
+        __main__.__dict__[self.theAttr] = False
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        import __main__
+        __main__.__dict__[self.theAttr] = True
+"""
+def CallAfterPaint ():
+    #print "-- painting post --"
+    currContext = cmds.currentCtx()
+    if currContext == 'artAttrContext' :
+        gArtAttrCurrentAttr= mel.eval('$tmp = $gArtAttrCurrentAttr')
+        typeOfNode,node,attr= gArtAttrCurrentAttr.split(".")
+
+        arrayValues = cmds.getAttr (node+'.'+attr)
+        # now set the command
+
+        doSetCommand = False
+        for ind,val in enumerate (arrayValues) : 
+            if val >0.0:
+                doSetCommand = True
+                break
+        if doSetCommand : 
+            zeroValues = [0]*len (arrayValues)
+            cmds.setAttr ( node+'.'+attr, zeroValues, type = "doubleArray" )
+            cmds.evalDeferred (partial (cmds.setAttr ,bsd+".clearArray", 1))
+
+def finalPaintBrush(slot):    
+    print "FINAL Brush"
 
 def clearPaint (bsd):
     nbAtt = cmds.getAttr (bsd+".wl", size=True)
     val = [0]*nbAtt 
     cmds.setAttr (bsd+".paintAttr", val, type = "doubleArray")
-    cmds.setAttr (bsd+".clearArray", 1)
 
+    """
+    currContext = cmds.currentCtx()
+    val = cmds.artAttrCtx( currContext, query=True,value =True )        
+    cmds.artAttrCtx( currContext, edit=True,value =0.0)
+    cmds.artAttrCtx( currContext, edit=True, clear=True )
+    cmds.artAttrCtx( currContext, edit=True,value =val)
+
+    """
+    #cmds.setAttr (bsd+".clearArray", 1)
     cmds.evalDeferred (partial (cmds.setAttr ,bsd+".clearArray", 1))
 
 """

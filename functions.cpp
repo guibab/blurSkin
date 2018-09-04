@@ -193,6 +193,7 @@ MStatus getListColorsJoints(MObject& skinCluster, MColorArray& jointsColors) {
     }
     return stat;
 }
+
 MStatus getListColors(MObject& skinCluster, int nbVertices, MColorArray& currColors,
                       bool useMPlug) {
     MStatus stat;
@@ -279,14 +280,16 @@ MStatus getListColors(MObject& skinCluster, int nbVertices, MColorArray& currCol
 MStatus editArray(int command, int influence, int nbJoints, MDoubleArray& fullWeightArray,
                   MIntArray& vertices, MDoubleArray& verticesWeight, MDoubleArray& theWeights) {
     MStatus stat;
+    // 0 Add - 1 Remove - 2 AddPercent - 3 Absolute - 4 Smooth - 5 Sharpen - 6 Colors
+
     // do the add --------------------------
     for (int i = 0; i < vertices.length(); ++i) {
         int theVert = vertices[i];
         double theVal = verticesWeight[i];
 
         double currentW = fullWeightArray[theVert * nbJoints + influence];
-        double newW = currentW + theVal;  // DO ADD -------
-        if (newW > 1.0) newW = 1.0;
+        double newW = currentW + theVal;            // DO ADD
+        newW = std::max(0.0, std::min(newW, 1.0));  // clamp
         double newRest = 1.0 - newW;
         double oldRest = 1.0 - currentW;
         double div = oldRest / newRest;
@@ -294,15 +297,66 @@ MStatus editArray(int command, int influence, int nbJoints, MDoubleArray& fullWe
         for (int j = 0; j < nbJoints; ++j) {
             if (j != influence) {
                 if (newW == 1.0)
-                    fullWeightArray[theVert * nbJoints + j] = 0.0;
+                    theWeights[i * nbJoints + j] = 0.0;
                 else {
-                    fullWeightArray[theVert * nbJoints + j] /= div;
+                    theWeights[i * nbJoints + j] = fullWeightArray[theVert * nbJoints + j] / div;
                 }
             } else
-                fullWeightArray[theVert * nbJoints + influence] = newW;
+                theWeights[i * nbJoints + influence] = newW;
 
-            theWeights[i * nbJoints + j] = fullWeightArray[theVert * nbJoints + j];
+            // fullWeightArray[theVert*nbJoints + j] = verticesWeight[i] * theWeights[i*nbJoints +
+            // j] + (1.0 - verticesWeight[i]) * fullWeightArray[theVert*nbJoints + j];
         }
     }
     return stat;
+}
+
+MStatus setAverageWeight(MIntArray& verticesAround, int currentVertex, int indexCurrVert,
+                         int nbJoints, MIntArray& lockJoints, MDoubleArray& fullWeightArray,
+                         MDoubleArray& theWeights) {
+    MStatus stat;
+    int sizeVertices = verticesAround.length();
+    int i, j, posi;
+    // MGlobal::displayInfo(MString(" paint smooth vtx [")+ currentVertex+ MString("] index - ") +
+    // indexCurrVert + MString(" aroundCount ") + sizeVertices);
+
+    MDoubleArray sumWeigths;
+    for (j = 0; j < nbJoints; j++) sumWeigths.append(0.0);
+
+    // std::cout << " allWeigths NEW\t";
+    for (i = 0; i < sizeVertices; i++) {
+        for (j = 0; j < nbJoints; j++) {
+            posi = verticesAround[i] * nbJoints + j;
+            sumWeigths[j] += fullWeightArray[posi];
+        }
+    }
+    double total = 0.0;
+    double totalBaseVtx = 0.0;
+    int assign = 0;
+    for (j = 0; j < nbJoints; j++) {
+        int posi = currentVertex * nbJoints + j;
+        sumWeigths[j] /= sizeVertices;
+
+        if (!lockJoints[j]) {
+            total += sumWeigths[j];
+            totalBaseVtx += fullWeightArray[posi];
+            assign += 1;
+        } else {
+            MGlobal::displayInfo("  -- > lockJoints   " + j);
+        }
+    }
+    if (total > 0. && totalBaseVtx > 0.) {
+        double mult = totalBaseVtx / total;
+        // std::cout << "\n vtx [" << currentVertex << "]" << " total " << total << "\n";
+        for (j = 0; j < nbJoints; j++) {
+            int posiToSet = indexCurrVert * nbJoints + j;
+            if (!lockJoints[j]) {
+                sumWeigths[j] *= mult;  // normalement divide par 1, sauf cas lock joints
+                                        // std::cout << " " << sumWeigths[j];
+                // theWeights.set(sumWeigths[j], posiToSet );
+                theWeights[posiToSet] = sumWeigths[j];
+            }
+        }
+    }
+    return MS::kSuccess;
 }

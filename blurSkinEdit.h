@@ -18,6 +18,7 @@
 #include <maya/MFnTypedAttribute.h>
 #include <maya/MIOStream.h>
 #include <maya/MIntArray.h>
+#include <maya/MItMeshVertex.h>
 #include <maya/MPlug.h>
 #include <maya/MPlugArray.h>
 #include <maya/MPxNode.h>
@@ -38,12 +39,18 @@ class blurSkinDisplay : public MPxNode {
     MObject skinCluster_;
     MColorArray currColors, jointsColors;
     MDoubleArray paintedValues;
+    std::vector<MIntArray> connectedVertices;  // use by MItMeshVertex getConnectedVertices
+    std::vector<MIntArray> connectedFaces;     // use by MItMeshVertex getConnectedFaces
+    void getConnectedVertices(MObject& outMesh, int nbVertices);
 
-    bool applyPaint = false, clearTheArray = false, reloadCommand = true;
+    MIntArray lockJoints, lockVertices;
+    bool applyPaint = false, clearTheArray = false, reloadCommand = true, postSetting = true;
     int influenceIndex = -1, commandIndex = 0;
     int nbJoints = 0;
+
     // void resizeVertexIndexes(const unsigned int newSize);
     std::vector<std::vector<std::pair<int, float>>> skin_weights_;
+
     MDoubleArray skinWeightList;
 
     MStatus blurSkinDisplay::fillArrayValues(bool doColors = false);
@@ -66,6 +73,7 @@ class blurSkinDisplay : public MPxNode {
     static MObject _outMesh;
     static MObject _paintableAttr;
     static MObject _clearArray;
+    static MObject _postSetting;
     static MObject _commandAttr;
     static MObject _influenceAttr;
 

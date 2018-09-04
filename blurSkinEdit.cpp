@@ -8,6 +8,7 @@ MObject blurSkinDisplay::_inMesh;
 MObject blurSkinDisplay::_outMesh;
 MObject blurSkinDisplay::_paintableAttr;
 MObject blurSkinDisplay::_clearArray;
+MObject blurSkinDisplay::_postSetting;
 MObject blurSkinDisplay::_commandAttr;
 MObject blurSkinDisplay::_influenceAttr;
 MObject blurSkinDisplay::_s_per_joint_weights;
@@ -15,6 +16,7 @@ MObject blurSkinDisplay::_s_skin_weights;
 
 blurSkinDisplay::blurSkinDisplay() {}
 blurSkinDisplay::~blurSkinDisplay() {}
+
 // The compute() method does the actual work of the node using the inputs
 MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
     MStatus status;
@@ -34,7 +36,8 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
         }
         if (skinCluster_ != MObject::kNullObj) {
             // 1 get the colors
-            MFnMesh meshFn(outMeshData.asMesh());
+            MObject outMesh = outMeshData.asMesh();
+            MFnMesh meshFn(outMesh);
             int nbVertices = meshFn.numVertices();
             if (this->init) {  // init of node /////////////////
                 this->init = false;
@@ -48,13 +51,21 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 meshFn.setCurrentColorSetName(MString("paintColorsSet"));
                 meshFn.setColors(this->currColors);
                 meshFn.assignColors(fullVvertexList);
+                // locks joints // all unlock
+                this->lockJoints = MIntArray(nbVertices, 0);
+
+                // get connected vertices --------------------
+                getConnectedVertices(outMesh, nbVertices);
             }
             if (this->reloadCommand) {
                 if (verbose) MGlobal::displayInfo(" reloadCommand  ");
                 MDataHandle commandData = dataBlock.inputValue(_commandAttr);
                 MDataHandle influenceData = dataBlock.inputValue(_influenceAttr);
+                MDataHandle postSettingData = dataBlock.inputValue(_postSetting);
                 this->influenceIndex = influenceData.asInt();
                 this->commandIndex = commandData.asInt();
+                this->postSetting = postSettingData.asBool();
+
                 if (verbose)
                     MGlobal::displayInfo(MString(" commandeIndex  ") + this->commandIndex + " - ");
                 if (verbose)
@@ -71,8 +82,14 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 // consider painted attribute --------
                 /////////////////////////////////////////////////////////////////
                 MColor multColor(1, 1, 1);
-                if ((commandIndex < 2) && (influenceIndex > -1))
+                float intensity = .8;
+                // 0 Add - 1 Remove - 2 AddPercent - 3 Absolute - 4 Smooth - 5 Sharpen - 6 Colors
+
+                if ((commandIndex < 4) && (influenceIndex > -1))
                     multColor = this->jointsColors[influenceIndex];
+                else
+                    intensity = .5;
+
                 MColorArray theEditColors;
                 MIntArray theEditVerts;
 
@@ -107,24 +124,51 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                         double val = arrayData[i];
                         if (val > 0) {
                             if (val != this->paintedValues[i]) {
+                                val = std::max(0.0, std::min(val, 1.0));  // clamp
                                 theEditVerts.append(i);
                                 verticesWeight.append(val);
                                 // MGlobal::displayInfo(MString(" paint value ") + i + MString(" -
                                 // ") + val);
+                                this->paintedValues[i] = val;  // store to not repaint
+
+                                val *= intensity;
                                 theEditColors.append(val * multColor +
                                                      (1.0 - val) * this->currColors[i]);
-                                this->paintedValues[i] = val;  // store to not repaint
                             }
                         }
                     }
                     // Here the magic of changing weights happens
                     // -------------------------------------------------
-                    if (commandIndex < 2) {
-                        MDoubleArray theWeights(this->nbJoints * theEditVerts.length(), 0.0);
-                        status = editArray(commandIndex, influenceIndex, this->nbJoints,
-                                           this->skinWeightList, theEditVerts, verticesWeight,
-                                           theWeights);
-                        replace_weights(dataBlock, theEditVerts, theWeights);
+                    if (!this->postSetting) {
+                        if ((commandIndex == 0) || (commandIndex == 4)) {
+                            MDoubleArray theWeights(this->nbJoints * theEditVerts.length(), 0.0);
+                            if (commandIndex == 4) {
+                                for (int i = 0; i < theEditVerts.length(); ++i) {
+                                    int theVert = theEditVerts[i];
+                                    double theVal = verticesWeight[i];
+
+                                    MIntArray vertsAround = this->connectedVertices[theVert];
+                                    status = setAverageWeight(vertsAround, theVert, i,
+                                                              this->nbJoints, this->lockJoints,
+                                                              this->skinWeightList, theWeights);
+                                }
+                            } else {
+                                status = editArray(commandIndex, influenceIndex, this->nbJoints,
+                                                   this->skinWeightList, theEditVerts,
+                                                   verticesWeight, theWeights);
+                            }
+                            // now set the weights
+                            for (int i = 0; i < theEditVerts.length(); ++i) {
+                                int theVert = theEditVerts[i];
+                                for (int j = 0; j < nbJoints; ++j) {
+                                    this->skinWeightList[theVert * nbJoints + j] =
+                                        verticesWeight[i] * theWeights[i * nbJoints + j] +
+                                        (1.0 - verticesWeight[i]) *
+                                            this->skinWeightList[theVert * nbJoints + j];
+                                }
+                            }
+                            replace_weights(dataBlock, theEditVerts, theWeights);
+                        }
                     }
                 }
                 // meshFn.setVertexColors(theEditColors, theEditVerts);
@@ -141,6 +185,21 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
 
     return status;
 }
+
+void blurSkinDisplay::getConnectedVertices(MObject& outMesh, int nbVertices) {
+    MItMeshVertex vertexIter(outMesh);
+    connectedVertices.resize(nbVertices);
+    connectedFaces.resize(nbVertices);
+    for (int vtxTmp = 0; !vertexIter.isDone(); vertexIter.next(), ++vtxTmp) {
+        MIntArray surroundingVertices, surroundingFaces;
+        vertexIter.getConnectedVertices(surroundingVertices);
+        connectedVertices[vtxTmp] = surroundingVertices;
+
+        vertexIter.getConnectedFaces(surroundingFaces);
+        connectedFaces[vtxTmp] = surroundingFaces;
+    }
+}
+
 void blurSkinDisplay::getConnectedSkinCluster() {
     MStatus status;
     MPlug outMeshPlug(thisMObject(), blurSkinDisplay::_outMesh);
@@ -175,6 +234,7 @@ void blurSkinDisplay::getConnectedSkinCluster() {
         */
     }
 }
+
 MStatus blurSkinDisplay::fillArrayValues(bool doColors) {
     MStatus status = MS::kSuccess;
 
@@ -318,7 +378,9 @@ MPlug blurSkinDisplay::passThroughToOne(const MPlug& plug) const {
 
     return MPlug();
 }
+
 void* blurSkinDisplay::creator() { return (new blurSkinDisplay()); }
+
 MStatus blurSkinDisplay::initialize() {
     MStatus status;
 
@@ -337,6 +399,9 @@ MStatus blurSkinDisplay::initialize() {
     meshAttr.setConnectable(true);
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_outMesh);
 
+    blurSkinDisplay::_postSetting =
+        numAtt.create("postSetting", "ps", MFnNumericData::kBoolean, true, &status);
+    status = blurSkinDisplay::addAttribute(blurSkinDisplay::_postSetting);
     ///////////////////////////////////////////////////////////////////////////
     // paintable attributes
     ///////////////////////////////////////////////////////////////////////////
@@ -359,9 +424,9 @@ MStatus blurSkinDisplay::initialize() {
     CHECK_MSTATUS(enumAttr.addField("Remove", 1));
     CHECK_MSTATUS(enumAttr.addField("AddPercent", 2));
     CHECK_MSTATUS(enumAttr.addField("Absolute", 3));
-    CHECK_MSTATUS(enumAttr.addField("Smooth", 2));
-    CHECK_MSTATUS(enumAttr.addField("Sharpen", 3));
-    CHECK_MSTATUS(enumAttr.addField("Nothing", 4));
+    CHECK_MSTATUS(enumAttr.addField("Smooth", 4));
+    CHECK_MSTATUS(enumAttr.addField("Sharpen", 5));
+    CHECK_MSTATUS(enumAttr.addField("Colors", 6));
     CHECK_MSTATUS(enumAttr.setStorable(true));
     CHECK_MSTATUS(enumAttr.setKeyable(true));
     CHECK_MSTATUS(enumAttr.setReadable(true));
@@ -408,13 +473,15 @@ MStatus blurSkinDisplay::initialize() {
 
     MGlobal::executeCommand("makePaintable -attrType doubleArray blurSkinDisplay paintAttr");
 }
+
 MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
                                             MPlugArray& affectedPlugs) {
     MStatus status;
     MObject thisNode = thisMObject();
     MFnDependencyNode fnThisNode(thisNode);
     this->reloadCommand =
-        ((plugBeingDirtied == _commandAttr) || (plugBeingDirtied == _influenceAttr));
+        ((plugBeingDirtied == _commandAttr) || (plugBeingDirtied == _influenceAttr) ||
+         (plugBeingDirtied == _postSetting));
     this->clearTheArray = (plugBeingDirtied == _clearArray);
 
     if ((plugBeingDirtied == _paintableAttr) || this->reloadCommand || this->clearTheArray) {

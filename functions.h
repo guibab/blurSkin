@@ -20,6 +20,11 @@
 #include <maya/MObjectArray.h>
 #include <maya/MPlug.h>
 
+#include <algorithm>
+#include <cstdint>
+#include <iomanip>
+#include <iostream>
+#include <random>
 #include <vector>
 
 // FUNCTION DECLARATION:
@@ -35,4 +40,7 @@ MStatus getListColors(MObject& skinCluster, int nbVertices, MColorArray& currCol
 MStatus getListColorsJoints(MObject& skinCluster, MColorArray& jointsColors);
 MStatus editArray(int command, int influence, int nbJoints, MDoubleArray& fullWeightArray,
                   MIntArray& vertices, MDoubleArray& verticesWeight, MDoubleArray& theWeights);
+MStatus setAverageWeight(MIntArray& verticesAround, int currentVertex, int indexCurrVert,
+                         int nbJoints, MIntArray& lockJoints, MDoubleArray& fullWeightArray,
+                         MDoubleArray& theWeights);
 #endif
