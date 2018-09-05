@@ -288,7 +288,16 @@ MStatus editArray(int command, int influence, int nbJoints, MDoubleArray& fullWe
         double theVal = verticesWeight[i];
 
         double currentW = fullWeightArray[theVert * nbJoints + influence];
-        double newW = currentW + theVal;            // DO ADD
+        double newW = currentW;
+        if (command == 0)
+            newW += theVal;  // ADD
+        else if (command == 1)
+            newW -= theVal;  // Remove
+        else if (command == 2)
+            newW += theVal * newW;  // AddPercent
+        else if (command == 3)
+            newW = theVal;  // Absolute
+
         newW = std::max(0.0, std::min(newW, 1.0));  // clamp
         double newRest = 1.0 - newW;
         double oldRest = 1.0 - currentW;

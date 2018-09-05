@@ -32,7 +32,7 @@
 
 class blurSkinDisplay : public MPxNode {
    private:
-    bool verbose = false;
+    bool verbose = true;
     bool init = true;
 
     // void displayLayerWeights(const SkinLayer &layer);
@@ -46,11 +46,16 @@ class blurSkinDisplay : public MPxNode {
     MIntArray lockJoints, lockVertices;
     bool applyPaint = false, clearTheArray = false, reloadCommand = true, postSetting = true;
     bool callUndo = false;
-    int influenceIndex = 0, commandIndex = 0;
+    int influenceIndex = 0, commandIndex = 0, smoothRepeat = 3;
     int nbJoints = 0;
 
     // void resizeVertexIndexes(const unsigned int newSize);
     std::vector<std::vector<std::pair<int, float>>> skin_weights_;
+
+    // std::vector< MIntArray> undoVertsIndices_;
+    // std::vector< MDoubleArray> undoVertsValues_;
+    std::vector<std::vector<int>> undoVertsIndices_;
+    std::vector<std::vector<double>> undoVertsValues_;
 
     MDoubleArray skinWeightList;
 
@@ -58,8 +63,8 @@ class blurSkinDisplay : public MPxNode {
     void getConnectedSkinCluster();
     MStatus getAttributes(MDataBlock& dataBlock);
     MStatus applyCommand(MDataBlock& dataBlock, MIntArray& theEditVerts,
-                         MDoubleArray& verticesWeight);
-    MStatus refreshColors(MIntArray& theVerts);
+                         MDoubleArray& verticesWeight, bool storeUndo = true);
+    MStatus refreshColors(MIntArray& theVerts, MColorArray& theEditColors);
 
    public:
     blurSkinDisplay();
@@ -81,6 +86,7 @@ class blurSkinDisplay : public MPxNode {
     static MObject _callUndo;
     static MObject _postSetting;
     static MObject _commandAttr;
+    static MObject _smoothRepeat;
     static MObject _influenceAttr;
 
     static MObject _s_per_joint_weights;

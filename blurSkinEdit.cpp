@@ -11,6 +11,7 @@ MObject blurSkinDisplay::_clearArray;
 MObject blurSkinDisplay::_callUndo;
 MObject blurSkinDisplay::_postSetting;
 MObject blurSkinDisplay::_commandAttr;
+MObject blurSkinDisplay::_smoothRepeat;
 MObject blurSkinDisplay::_influenceAttr;
 MObject blurSkinDisplay::_s_per_joint_weights;
 MObject blurSkinDisplay::_s_skin_weights;
@@ -24,13 +25,17 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
     if (verbose) MGlobal::displayInfo(" reloadCommand  ");
     MDataHandle commandData = dataBlock.inputValue(_commandAttr);
     MDataHandle influenceData = dataBlock.inputValue(_influenceAttr);
+    MDataHandle smoothRepeatData = dataBlock.inputValue(_smoothRepeat);
     MDataHandle postSettingData = dataBlock.inputValue(_postSetting);
+
     this->influenceIndex = influenceData.asInt();
     this->commandIndex = commandData.asInt();
+    this->smoothRepeat = smoothRepeatData.asInt();
     this->postSetting = postSettingData.asBool();
 
     if (verbose) MGlobal::displayInfo(MString(" commandeIndex  ") + this->commandIndex + " - ");
     if (verbose) MGlobal::displayInfo(MString(" influenceIndex ") + this->influenceIndex + " - ");
+    if (verbose) MGlobal::displayInfo(MString(" smoothRepeat   ") + this->smoothRepeat + " - ");
 
     this->reloadCommand = false;
     this->applyPaint = false;
@@ -125,7 +130,7 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                             applyCommand(dataBlock, theEditVerts, verticesWeight);
                         // refresh the colors with real values
                         // -------------------------------------------
-                        refreshColors(theEditVerts);
+                        refreshColors(theEditVerts, theEditColors);
 
                         MPlug clearArrayPlug(thisMObject(), _clearArray);
                         clearArrayPlug.setBool(false);
@@ -139,6 +144,27 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                         if (callUndoVal) strVal = "True";
                         MGlobal::displayInfo("  -- > CALL UNDO" + strVal);
                     }
+                    if (callUndoVal) {                             // do the undo
+                        if (this->undoVertsIndices_.size() > 0) {  // if stack is more than zero
+                            std::vector<int> undoVerts = this->undoVertsIndices_.back();
+                            std::vector<double> undoWeight = this->undoVertsValues_.back();
+
+                            MDoubleArray undoWeight_MArr;  // (undoWeight.size());
+                            MIntArray undoVerts_MArr;      // (undoWeight.size());
+                            for (int vtx : undoVerts) undoVerts_MArr.append(vtx);
+                            for (double val : undoWeight) undoWeight_MArr.append(val);
+
+                            applyCommand(dataBlock, undoVerts_MArr, undoWeight_MArr,
+                                         false);  // not storing undos - should prepare redos
+
+                            this->undoVertsIndices_.pop_back();
+                            this->undoVertsValues_.pop_back();
+                            refreshColors(undoVerts_MArr, theEditColors);
+                        } else {
+                            MGlobal::displayInfo("  NO MORE UNDOS ");
+                        }
+                    }
+                    // now set Attr false
                     MPlug callUndoPlug(thisMObject(), _callUndo);
                     callUndoPlug.setBool(false);
                 } else {
@@ -186,31 +212,55 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
 }
 
 MStatus blurSkinDisplay::applyCommand(MDataBlock& dataBlock, MIntArray& theEditVerts,
-                                      MDoubleArray& verticesWeight) {
+                                      MDoubleArray& verticesWeight, bool storeUndo) {
     MStatus status;
+    if (verbose) MGlobal::displayInfo(" applyCommand ");
+
     if ((commandIndex == 0) || (commandIndex == 4)) {
+        // MDoubleArray previousWeights(this->nbJoints*theEditVerts.length(), 0.0);
+        std::vector<double> previousWeights;
+        std::vector<int> undoVerts;
+        undoVerts.resize(theEditVerts.length());
+        previousWeights.resize(this->nbJoints * theEditVerts.length());
+
         MDoubleArray theWeights(this->nbJoints * theEditVerts.length(), 0.0);
-        if (commandIndex == 4) {
+        int repeatLimit = 1;
+        if (commandIndex == 4) repeatLimit = this->smoothRepeat;
+        for (int repeat = 0; repeat < repeatLimit; ++repeat) {
+            if (commandIndex == 4) {
+                for (int i = 0; i < theEditVerts.length(); ++i) {
+                    int theVert = theEditVerts[i];
+                    double theVal = verticesWeight[i];
+
+                    MIntArray vertsAround = this->connectedVertices[theVert];
+                    status = setAverageWeight(vertsAround, theVert, i, this->nbJoints,
+                                              this->lockJoints, this->skinWeightList, theWeights);
+                }
+            } else {
+                status = editArray(commandIndex, influenceIndex, this->nbJoints,
+                                   this->skinWeightList, theEditVerts, verticesWeight, theWeights);
+            }
+            // now set the weights
             for (int i = 0; i < theEditVerts.length(); ++i) {
                 int theVert = theEditVerts[i];
-                double theVal = verticesWeight[i];
-
-                MIntArray vertsAround = this->connectedVertices[theVert];
-                status = setAverageWeight(vertsAround, theVert, i, this->nbJoints, this->lockJoints,
-                                          this->skinWeightList, theWeights);
+                for (int j = 0; j < this->nbJoints; ++j) {
+                    if (repeat == 0 && storeUndo)
+                        previousWeights[i * this->nbJoints + j] =
+                            this->skinWeightList[theVert * this->nbJoints + j];
+                    this->skinWeightList[theVert * this->nbJoints + j] =
+                        verticesWeight[i] * theWeights[i * this->nbJoints + j] +
+                        (1.0 - verticesWeight[i]) *
+                            this->skinWeightList[theVert * this->nbJoints + j];
+                }
             }
-        } else {
-            status = editArray(commandIndex, influenceIndex, this->nbJoints, this->skinWeightList,
-                               theEditVerts, verticesWeight, theWeights);
         }
-        // now set the weights
-        for (int i = 0; i < theEditVerts.length(); ++i) {
-            int theVert = theEditVerts[i];
-            for (int j = 0; j < nbJoints; ++j) {
-                this->skinWeightList[theVert * nbJoints + j] =
-                    verticesWeight[i] * theWeights[i * nbJoints + j] +
-                    (1.0 - verticesWeight[i]) * this->skinWeightList[theVert * nbJoints + j];
-            }
+        if (storeUndo) {
+            // MIntArray undoVerts;
+            // undoVerts.copy(theEditVerts);
+            // now store the undo ----------------
+            for (int i = 0; i < theEditVerts.length(); ++i) undoVerts[i] = theEditVerts[i];
+            this->undoVertsIndices_.push_back(undoVerts);
+            this->undoVertsValues_.push_back(previousWeights);
         }
         replace_weights(dataBlock, theEditVerts, theWeights);
     }
@@ -266,8 +316,12 @@ void blurSkinDisplay::getConnectedSkinCluster() {
     }
 }
 
-MStatus blurSkinDisplay::refreshColors(MIntArray& theVerts) {
+MStatus blurSkinDisplay::refreshColors(MIntArray& theVerts, MColorArray& theEditColors) {
     MStatus status = MS::kSuccess;
+    if (verbose) MGlobal::displayInfo(" refreshColors CALL ");  // beginning opening of node
+    if (theEditColors.length() != theVerts.length()) {
+        theEditColors.setLength(theVerts.length());
+    }
     for (int i = 0; i < theVerts.length(); ++i) {
         int theVert = theVerts[i];
         MColor theColor;
@@ -275,6 +329,7 @@ MStatus blurSkinDisplay::refreshColors(MIntArray& theVerts) {
             theColor += jointsColors[j] * this->skinWeightList[theVert * this->nbJoints + j];
         }
         this->currColors[theVert] = theColor;
+        theEditColors[i] = theColor;
     }
     return status;
 }
@@ -483,6 +538,11 @@ MStatus blurSkinDisplay::initialize() {
 
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_commandAttr);
 
+    blurSkinDisplay::_smoothRepeat =
+        numAtt.create("smoothRepeat", "sr", MFnNumericData::kInt64, 3, &status);
+    numAtt.setMin(0);
+    status = blurSkinDisplay::addAttribute(blurSkinDisplay::_smoothRepeat);
+
     blurSkinDisplay::_influenceAttr =
         numAtt.create("influenceIndex", "ii", MFnNumericData::kInt64, 0, &status);
     numAtt.setMin(0);
@@ -529,7 +589,7 @@ MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
     MFnDependencyNode fnThisNode(thisNode);
     this->reloadCommand =
         ((plugBeingDirtied == _commandAttr) || (plugBeingDirtied == _influenceAttr) ||
-         (plugBeingDirtied == _postSetting));
+         (plugBeingDirtied == _smoothRepeat) || (plugBeingDirtied == _postSetting));
     this->clearTheArray = (plugBeingDirtied == _clearArray);
     this->callUndo = (plugBeingDirtied == _callUndo);
 

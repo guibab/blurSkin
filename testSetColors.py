@@ -14,7 +14,7 @@ deleteTheJobs (toSearch = "function CallAfterPaint")
 
 from maya import cmds, mel
 from functools import partial
-from dcc.maya import createMelProcedure
+#from dcc.maya import createMelProcedure
 """
 inflColors = cmds.listConnections ("skinCluster1.influenceColor", s=True, d=False, p=True, c=True)
 inflColors[1]
@@ -24,6 +24,7 @@ for jnt, inflColor in zip (inflColors[1::2],  inflColors[0::2]):
     #cmds.connectAttr (jnt.replace("objectColorRGB", "wireColorRGB"), inflColor )
 """
 
+mel.eval("source artAttrCreateMenuItems.mel")
 def setColorsOnJoints ():
     _colors = []
     for i in xrange (1,9) :
@@ -64,9 +65,11 @@ def addColorNode () :
     return bsd
 
 def enterPaint (bsd) : 
+    deleteTheJobs (toSearch = "function CallAfterPaint")
     nbAtt = cmds.getAttr (bsd+".wl", size=True)
     val = [0]*nbAtt 
     cmds.setAttr (bsd+".paintAttr", val, type = "doubleArray")
+    cmds.makePaintable( "blurSkinDisplay", "paintAttr")
     cmds.makePaintable( bsd, "paintAttr")
     
     msh,=cmds.ls (cmds.listHistory (bsd,af=True, f=True), type="mesh")
