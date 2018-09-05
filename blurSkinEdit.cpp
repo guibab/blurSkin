@@ -156,20 +156,31 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                     }
                     if (callUndoVal) {                             // do the undo
                         if (this->undoVertsIndices_.size() > 0) {  // if stack is more than zero
-                            std::vector<int> undoVerts = this->undoVertsIndices_.back();
-                            std::vector<double> undoWeight = this->undoVertsValues_.back();
+                            /*
+                            std::vector< int > undoVerts = this->undoVertsIndices_.back();
+                            std::vector< double > undoWeight = this->undoVertsValues_.back();
 
-                            MDoubleArray undoWeight_MArr;  // (undoWeight.size());
-                            MIntArray undoVerts_MArr;      // (undoWeight.size());
+                            MDoubleArray undoWeight_MArr;// (undoWeight.size());
+                            MIntArray undoVerts_MArr;// (undoWeight.size());
                             for (int vtx : undoVerts) undoVerts_MArr.append(vtx);
                             for (double val : undoWeight) undoWeight_MArr.append(val);
+                            */
+                            MDoubleArray undoWeight_MArr = this->undoVertsValues_.back();
+                            theEditVerts.copy(this->undoVertsIndices_.back());
 
-                            applyCommand(dataBlock, undoVerts_MArr, undoWeight_MArr,
-                                         false);  // not storing undos - should prepare redos
+                            for (int i = 0; i < theEditVerts.length(); ++i) {
+                                int theVert = theEditVerts[i];
+                                for (int j = 0; j < this->nbJoints; ++j) {
+                                    this->skinWeightList[theVert * this->nbJoints + j] =
+                                        undoWeight_MArr[i * this->nbJoints + j];
+                                }
+                            }
+
+                            replace_weights(dataBlock, theEditVerts, undoWeight_MArr);
 
                             this->undoVertsIndices_.pop_back();
                             this->undoVertsValues_.pop_back();
-                            refreshColors(undoVerts_MArr, theEditColors);
+                            refreshColors(theEditVerts, theEditColors);
                         } else {
                             MGlobal::displayInfo("  NO MORE UNDOS ");
                         }
@@ -227,11 +238,11 @@ MStatus blurSkinDisplay::applyCommand(MDataBlock& dataBlock, MIntArray& theEditV
     if (verbose) MGlobal::displayInfo(" applyCommand ");
 
     if ((commandIndex == 0) || (commandIndex == 4)) {
-        // MDoubleArray previousWeights(this->nbJoints*theEditVerts.length(), 0.0);
-        std::vector<double> previousWeights;
-        std::vector<int> undoVerts;
-        undoVerts.resize(theEditVerts.length());
-        previousWeights.resize(this->nbJoints * theEditVerts.length());
+        MDoubleArray previousWeights(this->nbJoints * theEditVerts.length(), 0.0);
+        // std::vector< double > previousWeights;
+        // std::vector< int > undoVerts;
+        // undoVerts.resize(theEditVerts.length());
+        // previousWeights.resize(this->nbJoints*theEditVerts.length());
 
         MDoubleArray theWeights(this->nbJoints * theEditVerts.length(), 0.0);
         int repeatLimit = 1;
@@ -265,10 +276,10 @@ MStatus blurSkinDisplay::applyCommand(MDataBlock& dataBlock, MIntArray& theEditV
             }
         }
         if (storeUndo) {
-            // MIntArray undoVerts;
-            // undoVerts.copy(theEditVerts);
+            MIntArray undoVerts;
+            undoVerts.copy(theEditVerts);
             // now store the undo ----------------
-            for (int i = 0; i < theEditVerts.length(); ++i) undoVerts[i] = theEditVerts[i];
+            // for (int i = 0; i < theEditVerts.length(); ++i) undoVerts[i] = theEditVerts[i];
             this->undoVertsIndices_.push_back(undoVerts);
             this->undoVertsValues_.push_back(previousWeights);
         }

@@ -52,10 +52,10 @@ class blurSkinDisplay : public MPxNode {
     // void resizeVertexIndexes(const unsigned int newSize);
     std::vector<std::vector<std::pair<int, float>>> skin_weights_;
 
-    // std::vector< MIntArray> undoVertsIndices_;
-    // std::vector< MDoubleArray> undoVertsValues_;
-    std::vector<std::vector<int>> undoVertsIndices_;
-    std::vector<std::vector<double>> undoVertsValues_;
+    std::vector<MIntArray> undoVertsIndices_;
+    std::vector<MDoubleArray> undoVertsValues_;
+    // std::vector< std::vector< int > > undoVertsIndices_;
+    // std::vector< std::vector< double > > undoVertsValues_;
 
     MDoubleArray skinWeightList;
 
