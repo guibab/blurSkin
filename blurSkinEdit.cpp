@@ -12,6 +12,7 @@ MObject blurSkinDisplay::_callUndo;
 MObject blurSkinDisplay::_postSetting;
 MObject blurSkinDisplay::_commandAttr;
 MObject blurSkinDisplay::_smoothRepeat;
+MObject blurSkinDisplay::_smoothDepth;
 MObject blurSkinDisplay::_influenceAttr;
 MObject blurSkinDisplay::_s_per_joint_weights;
 MObject blurSkinDisplay::_s_skin_weights;
@@ -26,16 +27,24 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
     MDataHandle commandData = dataBlock.inputValue(_commandAttr);
     MDataHandle influenceData = dataBlock.inputValue(_influenceAttr);
     MDataHandle smoothRepeatData = dataBlock.inputValue(_smoothRepeat);
+    MDataHandle smoothDepthData = dataBlock.inputValue(_smoothDepth);
     MDataHandle postSettingData = dataBlock.inputValue(_postSetting);
 
     this->influenceIndex = influenceData.asInt();
     this->commandIndex = commandData.asInt();
     this->smoothRepeat = smoothRepeatData.asInt();
+    int smoothDepthVal = smoothDepthData.asInt();
+
+    if (smoothDepthVal != this->smoothDepth) {
+        this->smoothDepth = smoothDepthVal;
+        refreshVertsConnection();
+    }
     this->postSetting = postSettingData.asBool();
 
     if (verbose) MGlobal::displayInfo(MString(" commandeIndex  ") + this->commandIndex + " - ");
     if (verbose) MGlobal::displayInfo(MString(" influenceIndex ") + this->influenceIndex + " - ");
     if (verbose) MGlobal::displayInfo(MString(" smoothRepeat   ") + this->smoothRepeat + " - ");
+    if (verbose) MGlobal::displayInfo(MString(" smoothDepth    ") + this->smoothDepth + " - ");
 
     this->reloadCommand = false;
     this->applyPaint = false;
@@ -86,6 +95,7 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
 
                 // get connected vertices --------------------
                 getConnectedVertices(outMesh, nbVertices);
+                refreshVertsConnection();
             } else if (this->applyPaint) {
                 if (verbose) MGlobal::displayInfo("  -- > applyPaint  ");
                 this->applyPaint = false;
@@ -232,7 +242,7 @@ MStatus blurSkinDisplay::applyCommand(MDataBlock& dataBlock, MIntArray& theEditV
                     int theVert = theEditVerts[i];
                     double theVal = verticesWeight[i];
 
-                    MIntArray vertsAround = this->connectedVertices[theVert];
+                    MIntArray vertsAround = this->allVertsAround[theVert];
                     status = setAverageWeight(vertsAround, theVert, i, this->nbJoints,
                                               this->lockJoints, this->skinWeightList, theWeights);
                 }
@@ -278,6 +288,31 @@ void blurSkinDisplay::getConnectedVertices(MObject& outMesh, int nbVertices) {
 
         vertexIter.getConnectedFaces(surroundingFaces);
         connectedFaces[vtxTmp] = surroundingFaces;
+    }
+}
+
+void blurSkinDisplay::refreshVertsConnection() {
+    this->allVertsAround.clear();
+    this->allVertsAround.resize(this->connectedVertices.size());
+    for (int i = 0; i < this->connectedVertices.size(); ++i) {
+        MIntArray surroundingVertices = this->connectedVertices[i];
+        std::unordered_set<int> setOfVerts;
+        for (unsigned int itVtx = 0; itVtx < surroundingVertices.length(); itVtx++)
+            setOfVerts.insert(surroundingVertices[itVtx]);
+        // for the repeats
+        for (int d = 1; d < this->smoothDepth; d++) {  // <= to add one more
+            for (unsigned int itVtx = 0; itVtx < surroundingVertices.length(); itVtx++) {
+                int vtx = surroundingVertices[itVtx];
+                // for (int vtx : setOfVerts) {
+                MIntArray repeatVertices = this->connectedVertices[vtx];
+                for (unsigned int itVtx = 0; itVtx < repeatVertices.length(); itVtx++)
+                    setOfVerts.insert(repeatVertices[itVtx]);
+            }
+        }
+        MIntArray vertsAround;
+        for (int vtx : setOfVerts) vertsAround.append(vtx);
+        this->allVertsAround[i] = vertsAround;
+        // this->set_vertsAround.push_back( setOfVerts );
     }
 }
 
@@ -540,8 +575,13 @@ MStatus blurSkinDisplay::initialize() {
 
     blurSkinDisplay::_smoothRepeat =
         numAtt.create("smoothRepeat", "sr", MFnNumericData::kInt64, 3, &status);
-    numAtt.setMin(0);
+    numAtt.setMin(1);
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_smoothRepeat);
+
+    blurSkinDisplay::_smoothDepth =
+        numAtt.create("smoothDepth", "dpt", MFnNumericData::kInt64, 1, &status);
+    numAtt.setMin(1);
+    status = blurSkinDisplay::addAttribute(blurSkinDisplay::_smoothDepth);
 
     blurSkinDisplay::_influenceAttr =
         numAtt.create("influenceIndex", "ii", MFnNumericData::kInt64, 0, &status);
@@ -587,9 +627,9 @@ MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
     MStatus status;
     MObject thisNode = thisMObject();
     MFnDependencyNode fnThisNode(thisNode);
-    this->reloadCommand =
-        ((plugBeingDirtied == _commandAttr) || (plugBeingDirtied == _influenceAttr) ||
-         (plugBeingDirtied == _smoothRepeat) || (plugBeingDirtied == _postSetting));
+    this->reloadCommand = plugBeingDirtied == _commandAttr || plugBeingDirtied == _influenceAttr ||
+                          plugBeingDirtied == _smoothRepeat || plugBeingDirtied == _smoothDepth ||
+                          plugBeingDirtied == _postSetting;
     this->clearTheArray = (plugBeingDirtied == _clearArray);
     this->callUndo = (plugBeingDirtied == _callUndo);
 
