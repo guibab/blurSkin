@@ -8,6 +8,7 @@ MObject blurSkinDisplay::_inMesh;
 MObject blurSkinDisplay::_outMesh;
 MObject blurSkinDisplay::_paintableAttr;
 MObject blurSkinDisplay::_clearArray;
+MObject blurSkinDisplay::_callUndo;
 MObject blurSkinDisplay::_postSetting;
 MObject blurSkinDisplay::_commandAttr;
 MObject blurSkinDisplay::_influenceAttr;
@@ -119,13 +120,27 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                             }
                         }
                         // post brushing apply values
-                        // ---------------------------------------------------
+                        // ----------------------------------------------------
                         if (this->postSetting)
                             applyCommand(dataBlock, theEditVerts, verticesWeight);
+                        // refresh the colors with real values
+                        // -------------------------------------------
+                        refreshColors(theEditVerts);
 
                         MPlug clearArrayPlug(thisMObject(), _clearArray);
                         clearArrayPlug.setBool(false);
                     }
+                } else if (this->callUndo) {
+                    this->callUndo = false;
+                    MDataHandle callUndoData = dataBlock.inputValue(_callUndo);
+                    bool callUndoVal = callUndoData.asBool();
+                    if (verbose) {
+                        MString strVal = "False";
+                        if (callUndoVal) strVal = "True";
+                        MGlobal::displayInfo("  -- > CALL UNDO" + strVal);
+                    }
+                    MPlug callUndoPlug(thisMObject(), _callUndo);
+                    callUndoPlug.setBool(false);
                 } else {
                     // read paint values ---------------------------
                     MFnDoubleArrayData arrayData;
@@ -249,6 +264,19 @@ void blurSkinDisplay::getConnectedSkinCluster() {
         }
         */
     }
+}
+
+MStatus blurSkinDisplay::refreshColors(MIntArray& theVerts) {
+    MStatus status = MS::kSuccess;
+    for (int i = 0; i < theVerts.length(); ++i) {
+        int theVert = theVerts[i];
+        MColor theColor;
+        for (int j = 0; j < this->nbJoints; ++j) {  // for each joint
+            theColor += jointsColors[j] * this->skinWeightList[theVert * this->nbJoints + j];
+        }
+        this->currColors[theVert] = theColor;
+    }
+    return status;
 }
 
 MStatus blurSkinDisplay::fillArrayValues(bool doColors) {
@@ -430,6 +458,10 @@ MStatus blurSkinDisplay::initialize() {
         numAtt.create("clearArray", "ca", MFnNumericData::kBoolean, false, &status);
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_clearArray);
 
+    blurSkinDisplay::_callUndo =
+        numAtt.create("callUndo", "cu", MFnNumericData::kBoolean, false, &status);
+    status = blurSkinDisplay::addAttribute(blurSkinDisplay::_callUndo);
+
     ///////////////////////////////////////////////////////////////////////////
     // creation attributes
     ///////////////////////////////////////////////////////////////////////////
@@ -499,8 +531,10 @@ MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
         ((plugBeingDirtied == _commandAttr) || (plugBeingDirtied == _influenceAttr) ||
          (plugBeingDirtied == _postSetting));
     this->clearTheArray = (plugBeingDirtied == _clearArray);
+    this->callUndo = (plugBeingDirtied == _callUndo);
 
-    if ((plugBeingDirtied == _paintableAttr) || this->reloadCommand || this->clearTheArray) {
+    if ((plugBeingDirtied == _paintableAttr) || this->reloadCommand || this->clearTheArray ||
+        this->callUndo) {
         this->applyPaint = true;
         MPlug outMeshPlug(thisNode, blurSkinDisplay::_outMesh);
         affectedPlugs.append(outMeshPlug);
