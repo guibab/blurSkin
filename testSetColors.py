@@ -72,7 +72,7 @@ def enterPaint (bsd) :
     cmds.makePaintable( "blurSkinDisplay", "paintAttr")
     cmds.makePaintable( bsd, "paintAttr")
     
-    msh,=cmds.ls (cmds.listHistory (bsd,af=True, f=True), type="mesh")
+    msh=cmds.ls (cmds.listHistory (bsd,af=True, f=True), type="mesh") [0]
     prt,=cmds.listRelatives (msh, p=True, path=True)
     
     cmds.select (prt)
@@ -128,6 +128,14 @@ def CallAfterPaint ():
             zeroValues = [0]*len (arrayValues)
             cmds.setAttr ( node+'.'+attr, zeroValues, type = "doubleArray" )
             cmds.evalDeferred (partial (cmds.setAttr ,bsd+".clearArray", 1))
+
+            # reconnect :
+            if cmds.nodeType (node)  == "blurSkinDisplay" :
+                outConn = cmds.listConnections (node+".wl", s=False, d=True)
+                if not outConn:
+                    print "RECONNECT WEIGHTLIST"
+                    outMeshConn = cmds.listConnections (node+".outMesh", s=False, d=True, type = "skinCluster")
+                    cmds.connectAttr (node+".weightList", outMeshConn[0]+".weightList", f=True)
 
 def finalPaintBrush(slot):    
     print "FINAL Brush"

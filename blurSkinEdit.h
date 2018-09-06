@@ -6,6 +6,8 @@
 #include <maya/MDataBlock.h>
 #include <maya/MDataHandle.h>
 #include <maya/MDoubleArray.h>
+#include <maya/MEvaluationNode.h>
+#include <maya/MFnComponentListData.h>
 #include <maya/MFnCompoundAttribute.h>
 #include <maya/MFnDependencyNode.h>
 #include <maya/MFnDoubleArrayData.h>
@@ -32,9 +34,9 @@
 
 class blurSkinDisplay : public MPxNode {
    private:
-    bool verbose = false;
+    bool verbose = true;
     bool init = true;
-
+    bool doConnectSkinCL = false;
     // void displayLayerWeights(const SkinLayer &layer);
     MObject skinCluster_;
     MColorArray currColors, jointsColors;
@@ -46,6 +48,7 @@ class blurSkinDisplay : public MPxNode {
     MIntArray lockJoints, lockVertices;
     bool applyPaint = false, clearTheArray = false, reloadCommand = true, postSetting = true;
     bool callUndo = false;
+    bool inputVerticesChanged = false;
     int influenceIndex = 0, commandIndex = 0, smoothRepeat = 3, smoothDepth = 1;
     int nbJoints = 0;
 
@@ -59,10 +62,13 @@ class blurSkinDisplay : public MPxNode {
 
     MDoubleArray skinWeightList;
 
-    MStatus blurSkinDisplay::fillArrayValues(bool doColors = false);
+    MStatus fillArrayValues(bool doColors = false);
+    MStatus querySkinClusterValues(MIntArray& verticesIndices, MDoubleArray& theWeights,
+                                   bool doColors = false);
     void getConnectedVertices(MObject& outMesh, int nbVertices);
     void refreshVertsConnection();
     void getConnectedSkinCluster();
+    void connectSkinClusterWL();
     MStatus getAttributes(MDataBlock& dataBlock);
     MStatus applyCommand(MDataBlock& dataBlock, MIntArray& theEditVerts,
                          MDoubleArray& verticesWeight, bool storeUndo = true);
@@ -73,8 +79,10 @@ class blurSkinDisplay : public MPxNode {
     virtual ~blurSkinDisplay();
     virtual MStatus compute(const MPlug& plug, MDataBlock& dataBlock);
     virtual MStatus setDependentsDirty(const MPlug& plugBeingDirtied, MPlugArray& affectedPlugs);
+    MStatus connectionBroken(const MPlug& plug, const MPlug& otherPlug, bool asSrc);
     virtual MPlug passThroughToOne(const MPlug& plug) const;
-
+    // MStatus postEvaluation(const MDGContext & 	context, const MEvaluationNode & 	evaluationNode,
+    // PostEvaluationType 	evalType);
     void set_skinning_weights(MDataBlock& block);
     void replace_weights(MDataBlock& block, MIntArray& theVertices, MDoubleArray& theWeights);
     static void* creator();
@@ -83,6 +91,7 @@ class blurSkinDisplay : public MPxNode {
 
     static MObject _inMesh;
     static MObject _outMesh;
+    static MObject _cpList;
     static MObject _paintableAttr;
     static MObject _clearArray;
     static MObject _callUndo;

@@ -6,6 +6,7 @@ MTypeId blurSkinDisplay::id(0x001226F9);
 
 MObject blurSkinDisplay::_inMesh;
 MObject blurSkinDisplay::_outMesh;
+MObject blurSkinDisplay::_cpList;
 MObject blurSkinDisplay::_paintableAttr;
 MObject blurSkinDisplay::_clearArray;
 MObject blurSkinDisplay::_callUndo;
@@ -40,6 +41,41 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
         refreshVertsConnection();
     }
     this->postSetting = postSettingData.asBool();
+
+    if (this->inputVerticesChanged) {  // the vertices are changed, time to reconnect to the
+                                       // weightList of the skinCluster
+        this->inputVerticesChanged = false;
+        if (verbose) MGlobal::displayInfo(MString(" inputVerticesChanged "));
+
+        MDataHandle inputIDs = dataBlock.inputValue(_cpList, &status);
+        MObject compList = inputIDs.data();
+        MFnComponentListData compListFn(compList);
+        unsigned i;
+        int j;
+        MIntArray cpIds;
+        // cpIds.clear();
+
+        MFn::Type componentType = MFn::kMeshVertComponent;
+        for (i = 0; i < compListFn.length(); i++) {
+            MObject comp = compListFn[i];
+            if (comp.apiType() == componentType) {
+                MFnSingleIndexedComponent siComp(comp);
+                for (j = 0; j < siComp.elementCount(); j++) cpIds.append(siComp.element(j));
+            }
+        }
+        if (cpIds.length() > 0) {
+            // get the weights from the plug --------
+            MDoubleArray theWeights(cpIds.length() * this->nbJoints, 0.0);
+            querySkinClusterValues(cpIds, theWeights, true);  // with colors
+            // set the weights in the datablock------------
+            replace_weights(dataBlock, cpIds, theWeights);
+            // reconnect ------------ done in maya
+            // connectSkinClusterWL();
+            this->doConnectSkinCL = true;
+
+            // set at zero -------- maybe in maya
+        }
+    }
 
     if (verbose) MGlobal::displayInfo(MString(" commandeIndex  ") + this->commandIndex + " - ");
     if (verbose) MGlobal::displayInfo(MString(" influenceIndex ") + this->influenceIndex + " - ");
@@ -228,7 +264,6 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
             //MGlobal::displayInfo(" _s_skin_weights CALL ");
     }*/
     dataBlock.setClean(plug);
-
     return status;
 }
 
@@ -340,27 +375,29 @@ void blurSkinDisplay::getConnectedSkinCluster() {
             skinCluster_ = destConn;
             break;
         }
-        ///////////////////////////////////////////////////////////////////////////
-        // now check the connection of the plug -----------------------------------
-        // we do it in maya cmds better
-        /*
-        MPlug weight_list_plug(thisMObject(), blurSkinDisplay::_s_skin_weights);
-        MPlugArray plugs;
-        weight_list_plug.connectedTo(plugs, true, false, &status);
-        if (plugs.length() == 0) { // not connected to the weightList
-                MFnDependencyNode skinDep(skinCluster_);
-                MPlug weight_list_skin_clus = skinDep.findPlug("weightList");
-                MDGModifier dg;
-                //status = dg.connect( weight_list_skin_clus, weight_list_plug);
-
-                MGlobal::displayInfo(" TRY CONNECT " + weight_list_plug.name() + " -> " +
-        weight_list_skin_clus.name()); status = dg.connect( weight_list_plug,
-        weight_list_skin_clus); if (MS::kSuccess != status) MGlobal::displayError("dg.connect(
-        weight_list_skin_clus, weight_list_plug);"); status = dg.doIt(); if (MS::kSuccess != status)
-        MGlobal::displayError("dg.doIt ;");
-        }
-        */
     }
+}
+
+void blurSkinDisplay::connectSkinClusterWL() {
+    MStatus status;
+    MPlug weight_list_plug(thisMObject(), blurSkinDisplay::_s_skin_weights);
+    MPlugArray plugs;
+    weight_list_plug.connectedTo(plugs, true, false, &status);
+    if (plugs.length() == 0) {  // not connected to the weightList
+        MFnDependencyNode skinDep(skinCluster_);
+        MPlug weight_list_skin_clus = skinDep.findPlug("weightList");
+        MDGModifier dg;
+        // status = dg.connect( weight_list_skin_clus, weight_list_plug);
+        MGlobal::displayInfo(" TRY CONNECT " + weight_list_plug.name() + " -> " +
+                             weight_list_skin_clus.name());
+        status = dg.connect(weight_list_plug, weight_list_skin_clus);
+        if (MS::kSuccess != status)
+            MGlobal::displayError("FAIL dg.connect( weight_list_skin_clus, weight_list_plug);");
+        status = dg.doIt();
+        if (MS::kSuccess != status) MGlobal::displayError("FAIL dg.doIt ;");
+    }
+
+    this->doConnectSkinCL = false;
 }
 
 MStatus blurSkinDisplay::refreshColors(MIntArray& theVerts, MColorArray& theEditColors) {
@@ -378,6 +415,41 @@ MStatus blurSkinDisplay::refreshColors(MIntArray& theVerts, MColorArray& theEdit
         this->currColors[theVert] = theColor;
         theEditColors[i] = theColor;
     }
+    return status;
+}
+
+MStatus blurSkinDisplay::querySkinClusterValues(MIntArray& verticesIndices,
+                                                MDoubleArray& theWeights, bool doColors) {
+    MStatus status = MS::kSuccess;
+
+    MFnDependencyNode skinClusterDep(skinCluster_);
+
+    MPlug weight_list_plug = skinClusterDep.findPlug("weightList");
+
+    for (int i = 0; i < verticesIndices.length(); ++i) {
+        int vertexIndex = verticesIndices[i];
+        // weightList[i]
+        MPlug ith_weights_plug = weight_list_plug.elementByLogicalIndex(vertexIndex);
+
+        // weightList[i].weight
+        MPlug plug_weights = ith_weights_plug.child(0);  // access first compound child
+        int nb_weights = plug_weights.numElements();
+
+        MColor theColor;
+        for (int j = 0; j < nb_weights; j++) {  // for each joint
+            MPlug weight_plug = plug_weights.elementByPhysicalIndex(j);
+            // weightList[i].weight[j]
+            int indexInfluence = weight_plug.logicalIndex();
+            double theWeight = weight_plug.asDouble();
+
+            this->skinWeightList[vertexIndex * nbJoints + indexInfluence] = theWeight;
+            theWeights[i * nbJoints + indexInfluence] = theWeight;
+            if (doColors) theColor += jointsColors[indexInfluence] * theWeight;
+        }
+        if (doColors) this->currColors[vertexIndex] = theColor;
+    }
+    if (verbose) MGlobal::displayInfo(" FILLED ARRAY VALUES ");
+
     return status;
 }
 
@@ -428,7 +500,7 @@ MStatus blurSkinDisplay::fillArrayValues(bool doColors) {
             float  val= myPair.second;
             */
         }
-        if (doColors) currColors[i] = theColor;
+        if (doColors) currColors[vertexIndex] = theColor;
     }
     if (verbose) MGlobal::displayInfo(" FILLED ARRAY VALUES ");
 
@@ -484,7 +556,6 @@ void blurSkinDisplay::replace_weights(MDataBlock& block, MIntArray& theVertices,
 
         unsigned handle_count = weight_list_hdl.elementCount(&status);
         unsigned builder_count = weight_list_builder.elementCount(&status);
-        // mayaAssert(builder_count == handle_count);
 
         MIntArray to_remove;
         // Scan array, update existing element, remove unsused ones
@@ -548,6 +619,16 @@ MStatus blurSkinDisplay::initialize() {
     blurSkinDisplay::_postSetting =
         numAtt.create("postSetting", "ps", MFnNumericData::kBoolean, true, &status);
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_postSetting);
+
+    ///////////////////////////////////////////////////////////////////////////
+    // paintable attributes
+    ///////////////////////////////////////////////////////////////////////////
+
+    MFnTypedAttribute attrFn;
+    _cpList = attrFn.create("inputComponents", "ics", MFnComponentListData::kComponentList);
+    attrFn.setStorable(false);  // To be stored during file-save
+    addAttribute(_cpList);
+
     ///////////////////////////////////////////////////////////////////////////
     // paintable attributes
     ///////////////////////////////////////////////////////////////////////////
@@ -634,6 +715,14 @@ MStatus blurSkinDisplay::initialize() {
     MGlobal::executeCommand("makePaintable -attrType doubleArray blurSkinDisplay paintAttr");
 }
 
+MStatus blurSkinDisplay::connectionBroken(const MPlug& plug, const MPlug& otherPlug, bool asSrc) {
+    if (plug == _s_skin_weights) {
+        MGlobal::displayInfo(" disconnect  _s_skin_weights");
+        MGlobal::displayInfo(plug.name() + " " + otherPlug.name());
+    }
+    return MS::kUnknownParameter;
+};
+
 MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
                                             MPlugArray& affectedPlugs) {
     MStatus status;
@@ -641,10 +730,10 @@ MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
     MFnDependencyNode fnThisNode(thisNode);
     this->reloadCommand = plugBeingDirtied == _commandAttr || plugBeingDirtied == _influenceAttr ||
                           plugBeingDirtied == _smoothRepeat || plugBeingDirtied == _smoothDepth ||
-                          plugBeingDirtied == _postSetting;
+                          plugBeingDirtied == _postSetting || plugBeingDirtied == _cpList;
     this->clearTheArray = (plugBeingDirtied == _clearArray);
     this->callUndo = (plugBeingDirtied == _callUndo);
-
+    this->inputVerticesChanged = (plugBeingDirtied == _cpList);
     if ((plugBeingDirtied == _paintableAttr) || this->reloadCommand || this->clearTheArray ||
         this->callUndo) {
         this->applyPaint = true;
@@ -653,3 +742,28 @@ MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
     }
     return (MS::kSuccess);
 }
+
+/*
+MStatus blurSkinDisplay::postEvaluation(const MDGContext& context, const MEvaluationNode&
+evaluationNode, PostEvaluationType evalType)
+{
+        MGlobal::displayInfo(" postEvaluation ");
+
+        if (!context.isNormal())
+                return MStatus::kFailure;
+
+        MStatus status;
+
+        //http://around-the-corner.typepad.com/adn/2017/05/improve-performance-with-mpxnodepreevaluation-mpxnodepostevaluation.html
+        if (evaluationNode.dirtyPlugExists(_cpList, &status) && status)
+        {
+                MGlobal::displayInfo(" postEvaluation - _cpList ");
+
+                if( this->doConnectSkinCL )connectSkinClusterWL();
+
+        }
+        return MStatus::kSuccess;
+}
+
+
+*/
