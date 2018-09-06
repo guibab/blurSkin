@@ -234,10 +234,11 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
 
 MStatus blurSkinDisplay::applyCommand(MDataBlock& dataBlock, MIntArray& theEditVerts,
                                       MDoubleArray& verticesWeight, bool storeUndo) {
+    // 0 Add - 1 Remove - 2 AddPercent - 3 Absolute - 4 Smooth - 5 Sharpen - 6 Colors
     MStatus status;
     if (verbose) MGlobal::displayInfo(" applyCommand ");
 
-    if ((commandIndex == 0) || (commandIndex == 4)) {
+    if (commandIndex < 6) {
         MDoubleArray previousWeights(this->nbJoints * theEditVerts.length(), 0.0);
         // std::vector< double > previousWeights;
         // std::vector< int > undoVerts;
