@@ -54,6 +54,7 @@ class blurSkinDisplay : public MPxNode {
     MIntArray lockJoints, lockVertices;
     bool applyPaint = false, clearTheArray = false, reloadCommand = true, postSetting = true;
     bool callUndo = false;
+    bool autoExpand = false;
     int colorCommand = 0;
     bool reloadSoloColor = false;
     bool inputVerticesChanged = false;
@@ -110,6 +111,7 @@ class blurSkinDisplay : public MPxNode {
     static MObject _smoothDepth;
     static MObject _smoothRepeat;
     static MObject _influenceAttr;
+    static MObject _autoExpandAttr;
 
     static MObject _s_per_joint_weights;
     static MObject _s_skin_weights;

@@ -16,6 +16,7 @@ MObject blurSkinDisplay::_colorType;
 MObject blurSkinDisplay::_smoothRepeat;
 MObject blurSkinDisplay::_smoothDepth;
 MObject blurSkinDisplay::_influenceAttr;
+MObject blurSkinDisplay::_autoExpandAttr;
 MObject blurSkinDisplay::_s_per_joint_weights;
 MObject blurSkinDisplay::_s_skin_weights;
 
@@ -32,13 +33,17 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
     MDataHandle smoothDepthData = dataBlock.inputValue(_smoothDepth);
     MDataHandle postSettingData = dataBlock.inputValue(_postSetting);
     MDataHandle colorTypeData = dataBlock.inputValue(_colorType);
+    MDataHandle autoExpandData = dataBlock.inputValue(_autoExpandAttr);
+
     int prevInfluenceIndex = this->influenceIndex;
     int prevColorCommand = this->colorCommand;
+    bool prevAutoExpand = this->autoExpand;
 
     this->influenceIndex = influenceData.asInt();
     this->commandIndex = commandData.asInt();
     this->smoothRepeat = smoothRepeatData.asInt();
     this->colorCommand = colorTypeData.asInt();
+    this->autoExpand = autoExpandData.asBool();
     int smoothDepthVal = smoothDepthData.asInt();
 
     if (smoothDepthVal != this->smoothDepth) {
@@ -186,7 +191,8 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 // 0 Add - 1 Remove - 2 AddPercent - 3 Absolute - 4 Smooth - 5 Sharpen - 6 Colors
 
                 if ((commandIndex < 4) && (influenceIndex > -1))
-                    multColor = this->jointsColors[influenceIndex];
+                    multColor = .7 * this->jointsColors[influenceIndex] +
+                                .3 * white;  // paint a little whiter
                 else {
                     multColor = white;
                     intensity = .7;
@@ -206,12 +212,14 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                         MGlobal::displayInfo("  -- > clearArrayVal   " + strVal);
                     }
                     if (clearArrayVal) {
+                        if (this->autoExpand && this->postSetting) {
+                            MGlobal::displayInfo("  auto Expand on postSetting");
+                        }
                         for (unsigned int i = 0; i < this->paintedValues.length(); i++) {
                             if (this->paintedValues[i] != 0) {
-                                multiEditColors.append(this->multiCurrentColors[i]);
+                                // multiEditColors.append(this->multiCurrentColors[i]);
                                 editVertsIndices.append(i);
                                 editVertsWeights.append(this->paintedValues[i]);
-
                                 this->paintedValues[i] = 0.0;
                             }
                         }
@@ -746,6 +754,10 @@ MStatus blurSkinDisplay::initialize() {
 
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_commandAttr);
 
+    blurSkinDisplay::_autoExpandAttr =
+        numAtt.create("autoExpand", "aex", MFnNumericData::kBoolean, false, &status);
+    status = blurSkinDisplay::addAttribute(blurSkinDisplay::_autoExpandAttr);
+
     blurSkinDisplay::_smoothRepeat =
         numAtt.create("smoothRepeat", "sr", MFnNumericData::kInt64, 3, &status);
     numAtt.setMin(1);
@@ -764,7 +776,7 @@ MStatus blurSkinDisplay::initialize() {
     blurSkinDisplay::_colorType = enumAttr.create("colorType", "cty", 0);
     CHECK_MSTATUS(enumAttr.addField("Multi", 0));
     CHECK_MSTATUS(enumAttr.addField("Solo", 1));
-    CHECK_MSTATUS(enumAttr.addField("None", 2));
+    // CHECK_MSTATUS(enumAttr.addField("None", 2));
     CHECK_MSTATUS(enumAttr.setStorable(true));
     CHECK_MSTATUS(enumAttr.setKeyable(true));
     CHECK_MSTATUS(enumAttr.setReadable(true));
@@ -823,7 +835,7 @@ MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
     this->reloadCommand = plugBeingDirtied == _commandAttr || plugBeingDirtied == _influenceAttr ||
                           plugBeingDirtied == _smoothRepeat || plugBeingDirtied == _smoothDepth ||
                           plugBeingDirtied == _postSetting || plugBeingDirtied == _colorType ||
-                          plugBeingDirtied == _cpList;
+                          plugBeingDirtied == _cpList || plugBeingDirtied == _autoExpandAttr;
     this->clearTheArray = (plugBeingDirtied == _clearArray);
     this->callUndo = (plugBeingDirtied == _callUndo);
     this->inputVerticesChanged = (plugBeingDirtied == _cpList);
