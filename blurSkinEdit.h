@@ -34,23 +34,31 @@
 
 class blurSkinDisplay : public MPxNode {
    private:
-    bool verbose = true;
+    bool verbose = false;
     bool init = true;
     bool doConnectSkinCL = false;
     // void displayLayerWeights(const SkinLayer &layer);
     MObject skinCluster_;
-    MColorArray currColors, jointsColors;
+    MColorArray currColors, jointsColors, soloColors;
+    int nbSoloColors = 500;
+
     MDoubleArray paintedValues;
     std::vector<MIntArray> connectedVertices;  // use by MItMeshVertex getConnectedVertices
     std::vector<MIntArray> connectedFaces;     // use by MItMeshVertex getConnectedFaces
     std::vector<MIntArray> allVertsAround;     // used verts around
+    int fullVertexListLength = 0;
 
     MIntArray lockJoints, lockVertices;
     bool applyPaint = false, clearTheArray = false, reloadCommand = true, postSetting = true;
     bool callUndo = false;
+    int colorCommand = 0;
+    bool reloadSoloColor = false;
     bool inputVerticesChanged = false;
     int influenceIndex = 0, commandIndex = 0, smoothRepeat = 3, smoothDepth = 1;
     int nbJoints = 0;
+    MString fullColorSet = MString("paintColorsSet");
+    MString soloColorSet = MString("soloColorsSet");
+    MIntArray VertexCountPerPolygon, fullVvertexList;
 
     // void resizeVertexIndexes(const unsigned int newSize);
     std::vector<std::vector<std::pair<int, float>>> skin_weights_;
@@ -73,6 +81,7 @@ class blurSkinDisplay : public MPxNode {
     MStatus applyCommand(MDataBlock& dataBlock, MIntArray& theEditVerts,
                          MDoubleArray& verticesWeight, bool storeUndo = true);
     MStatus refreshColors(MIntArray& theVerts, MColorArray& theEditColors);
+    MStatus editSoloColorSet(MFnMesh& meshFn, bool prepare);
 
    public:
     blurSkinDisplay();
@@ -97,6 +106,7 @@ class blurSkinDisplay : public MPxNode {
     static MObject _callUndo;
     static MObject _postSetting;
     static MObject _commandAttr;
+    static MObject _colorType;
     static MObject _smoothDepth;
     static MObject _smoothRepeat;
     static MObject _influenceAttr;
