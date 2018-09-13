@@ -39,16 +39,19 @@ class blurSkinDisplay : public MPxNode {
     bool doConnectSkinCL = false;
     // void displayLayerWeights(const SkinLayer &layer);
     MObject skinCluster_;
-    MColorArray currColors, jointsColors, soloColors;
-    int nbSoloColors = 500;
+    MColorArray multiCurrentColors, jointsColors, soloCurrentColors;
+    MIntArray soloColorsValues;
+    MString fullColorSet = MString("multiColorsSet");
+    MString soloColorSet = MString("soloColorsSet");
 
     MDoubleArray paintedValues;
+    MIntArray fullVvertexList;
     std::vector<MIntArray> connectedVertices;  // use by MItMeshVertex getConnectedVertices
     std::vector<MIntArray> connectedFaces;     // use by MItMeshVertex getConnectedFaces
     std::vector<MIntArray> allVertsAround;     // used verts around
     int fullVertexListLength = 0;
 
-    MIntArray lockJoints, lockVertices, allVertices;
+    MIntArray lockJoints, lockVertices;
     bool applyPaint = false, clearTheArray = false, reloadCommand = true, postSetting = true;
     bool callUndo = false;
     int colorCommand = 0;
@@ -56,13 +59,9 @@ class blurSkinDisplay : public MPxNode {
     bool inputVerticesChanged = false;
     int influenceIndex = 0, commandIndex = 0, smoothRepeat = 3, smoothDepth = 1;
     int nbJoints = 0;
-    MString fullColorSet = MString("multiColorsSet");
-    MString soloColorSet = MString("soloColorsSet");
-    MIntArray VertexCountPerPolygon, fullVvertexList;
 
     // void resizeVertexIndexes(const unsigned int newSize);
     std::vector<std::vector<std::pair<int, float>>> skin_weights_;
-
     std::vector<MIntArray> undoVertsIndices_;
     std::vector<MDoubleArray> undoVertsValues_;
     // std::vector< std::vector< int > > undoVertsIndices_;
@@ -80,8 +79,9 @@ class blurSkinDisplay : public MPxNode {
     MStatus getAttributes(MDataBlock& dataBlock);
     MStatus applyCommand(MDataBlock& dataBlock, MIntArray& theEditVerts,
                          MDoubleArray& verticesWeight, bool storeUndo = true);
-    MStatus refreshColors(MIntArray& theVerts, MColorArray& theEditColors);
-    MStatus editSoloColorSet(MFnMesh& meshFn, MIntArray& theEditVerts, bool prepare);
+    MStatus refreshColors(MIntArray& editVertsIndices, MColorArray& multiEditColors,
+                          MColorArray& soloEditColors);
+    MStatus editSoloColorSet(MFnMesh& meshFn);
 
    public:
     blurSkinDisplay();
