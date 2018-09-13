@@ -48,7 +48,7 @@ class blurSkinDisplay : public MPxNode {
     std::vector<MIntArray> allVertsAround;     // used verts around
     int fullVertexListLength = 0;
 
-    MIntArray lockJoints, lockVertices;
+    MIntArray lockJoints, lockVertices, allVertices;
     bool applyPaint = false, clearTheArray = false, reloadCommand = true, postSetting = true;
     bool callUndo = false;
     int colorCommand = 0;
@@ -56,7 +56,7 @@ class blurSkinDisplay : public MPxNode {
     bool inputVerticesChanged = false;
     int influenceIndex = 0, commandIndex = 0, smoothRepeat = 3, smoothDepth = 1;
     int nbJoints = 0;
-    MString fullColorSet = MString("paintColorsSet");
+    MString fullColorSet = MString("multiColorsSet");
     MString soloColorSet = MString("soloColorsSet");
     MIntArray VertexCountPerPolygon, fullVvertexList;
 
@@ -81,7 +81,7 @@ class blurSkinDisplay : public MPxNode {
     MStatus applyCommand(MDataBlock& dataBlock, MIntArray& theEditVerts,
                          MDoubleArray& verticesWeight, bool storeUndo = true);
     MStatus refreshColors(MIntArray& theVerts, MColorArray& theEditColors);
-    MStatus editSoloColorSet(MFnMesh& meshFn, bool prepare);
+    MStatus editSoloColorSet(MFnMesh& meshFn, MIntArray& theEditVerts, bool prepare);
 
    public:
     blurSkinDisplay();

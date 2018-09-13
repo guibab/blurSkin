@@ -93,6 +93,23 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
     if (this->colorCommand == 1)
         this->reloadSoloColor = (prevColorCommand != this->colorCommand) ||
                                 (prevInfluenceIndex != this->influenceIndex);
+
+    if (prevColorCommand != this->colorCommand) {
+        /*
+        MFnSkinCluster theSkinCluster(this->skinCluster_);
+        MObjectArray objectsDeformed;
+        theSkinCluster.getOutputGeometry(objectsDeformed);
+        MFnDependencyNode deformedNameMesh(objectsDeformed[0]);
+        //setAttr - type "string" Mesh_X_HeadBody_Pc_Sd1_SdDsp_Shape.currentColorSet
+        "soloColorsSet"; MPlug currentColorSet = deformedNameMesh.findPlug("currentColorSet");
+
+        if (this->colorCommand == 0)
+                currentColorSet.setValue(this->fullColorSet);
+        else
+                currentColorSet.setValue(this->soloColorSet);
+        */
+    }
+
     MGlobal::displayInfo(MString(" reloadSoloColor ") + this->reloadSoloColor + " - ");
 
     return status;
@@ -144,10 +161,14 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 // locks joints // all unlock
                 this->lockJoints = MIntArray(nbVertices, 0);
 
-                editSoloColorSet(meshFn, true);  // prepare the solo Colors
+                this->allVertices = MIntArray(nbVertices);
+                for (int i = 0; i < nbVertices; ++i) allVertices[i] = i;
+                editSoloColorSet(meshFn, allVertices, true);  // prepare the solo Colors
             } else if (this->reloadSoloColor) {
-                MGlobal::displayInfo(" about to CALL editSoloColorSet");
-                editSoloColorSet(meshFn, false);
+                // Mglobal::displayInfo(" about to CALL editSoloColorSet");
+                editSoloColorSet(meshFn, allVertices, false);
+                // if (this->colorCommand == 0)meshFn.setCurrentColorSetName(this->fullColorSet);
+                // else meshFn.setCurrentColorSetName(this->soloColorSet);
                 this->reloadSoloColor = false;
             } else if (this->applyPaint) {
                 if (verbose) MGlobal::displayInfo("  -- > applyPaint  ");
@@ -272,7 +293,7 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                     if (!this->postSetting) applyCommand(dataBlock, theEditVerts, verticesWeight);
                 }
                 meshFn.setSomeColors(theEditVerts, theEditColors, &this->fullColorSet);
-                // dataBlock.setClean(plug);
+                editSoloColorSet(meshFn, theEditVerts, false);
             }
         }
     }
@@ -284,9 +305,9 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
     return status;
 }
 
-MStatus blurSkinDisplay::editSoloColorSet(MFnMesh& meshFn, bool prepare) {
+MStatus blurSkinDisplay::editSoloColorSet(MFnMesh& meshFn, MIntArray& theEditVerts, bool prepare) {
     MStatus status;
-    if (verbose) MGlobal::displayInfo(" editSoloColorSet CALL ");
+    MGlobal::displayInfo(" editSoloColorSet CALL ");
     if (prepare) {
         meshFn.createColorSetDataMesh(this->soloColorSet);
         // meshFn.clearColors(&this->soloColorSet);
