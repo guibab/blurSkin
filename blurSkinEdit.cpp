@@ -131,7 +131,7 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
         MDataHandle outMeshData = dataBlock.outputValue(blurSkinDisplay::_outMesh);
 
         if (this->reloadCommand) getAttributes(dataBlock);
-        if (this->changedColorInfluence != -1) {  // user changed the color
+        if (this->changedColorInfluence != -1) {  // user changed the color of the influence
             if (!this->init) {
                 // MGlobal::displayInfo(MString(" changedColor ") + this->changedColorInfluence);
 
@@ -142,7 +142,6 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 float3& colorvalue = theHandle.asFloat3();
                 this->jointsColors[this->changedColorInfluence] =
                     MColor(colorvalue[0], colorvalue[1], colorvalue[2]);
-
             } else {
                 this->changedColorInfluence = -1;
                 dataBlock.setClean(plug);
@@ -392,23 +391,23 @@ MStatus blurSkinDisplay::editSoloColorSet(MFnMesh& meshFn) {
     MStatus status;
 
     MGlobal::displayInfo(" editSoloColorSet CALL ");
-    MIntArray soloColorIndices(this->fullVertexListLength);
     MColorArray colToSet;
     MIntArray vtxToSet;
     for (int theVert = 0; theVert < this->soloColorsValues.length(); ++theVert) {
         double val = this->skinWeightList[theVert * this->nbJoints + this->influenceIndex];
 
         if (val != this->soloColorsValues[theVert]) {
-            this->soloColorsValues[theVert] = val;
-            vtxToSet.append(theVert);
             MColor soloColor;
             val *= 2;
             if (val > 1)
                 soloColor = MColor(val, (val - 1), 0);
             else
                 soloColor = MColor(val, 0, 0);
-            colToSet.append(soloColor);
+
             this->soloCurrentColors[theVert] = soloColor;
+            this->soloColorsValues[theVert] = val;
+            colToSet.append(soloColor);
+            vtxToSet.append(theVert);
         }
     }
     meshFn.setSomeColors(vtxToSet, colToSet, &this->soloColorSet);

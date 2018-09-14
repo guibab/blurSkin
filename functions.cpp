@@ -181,15 +181,28 @@ MStatus getListColorsJoints(MObject& skinCluster, MColorArray& jointsColors) {
     // MGlobal::displayInfo(influenceColor_plug.name() + " - " +nbJoints);
     jointsColors.clear();
     jointsColors.setLength(nbJoints);
+    float black[4] = {0, 0, 0, 1};
     for (int i = 0; i < nbJoints; ++i) {
         // weightList[i]
         MPlug colorPlug = influenceColor_plug.elementByPhysicalIndex(i);
-        // MGlobal::displayInfo(colorPlug.name());
-        float element[4] = {colorPlug.child(0).asFloat(), colorPlug.child(1).asFloat(),
-                            colorPlug.child(2).asFloat(), 1};
-        // MGlobal::displayInfo(colorPlug.name()+ " "+ element[0] + " " + element[1] + " " +
-        // element[2]);
-        jointsColors.set(element, i);
+        if (colorPlug.isConnected()) {
+            MPlugArray connections;
+            colorPlug.connectedTo(connections, true, false);
+            if (connections.length() > 0) {
+                MPlug theConn = connections[0];
+                float element[4] = {theConn.child(0).asFloat(), theConn.child(1).asFloat(),
+                                    theConn.child(2).asFloat(), 1};
+                jointsColors.set(element, i);
+            } else
+                jointsColors.set(black, i);
+        } else {
+            // MGlobal::displayInfo(colorPlug.name());
+            float element[4] = {colorPlug.child(0).asFloat(), colorPlug.child(1).asFloat(),
+                                colorPlug.child(2).asFloat(), 1};
+            // MGlobal::displayInfo(colorPlug.name()+ " "+ element[0] + " " + element[1] + " " +
+            // element[2]);
+            jointsColors.set(element, i);
+        }
     }
     return stat;
 }
