@@ -186,17 +186,21 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 // solo colors -----------------------
                 meshFn.createColorSetDataMesh(this->soloColorSet);
                 this->soloCurrentColors = MColorArray(nbVertices, MColor(0, 0, 0));
-                this->soloColorsValues = MIntArray(nbVertices, 0);
+                this->soloColorsValues = MDoubleArray(nbVertices, 0.0);
 
                 meshFn.setColors(this->soloCurrentColors, &this->soloColorSet);
                 meshFn.assignColors(fullVvertexList, &this->soloColorSet);
                 // locks joints // all unlock
                 this->lockJoints = MIntArray(nbVertices, 0);
             } else if (this->reloadSoloColor) {
+                // if (this->soloColorsValues.length() > 20266)MGlobal::displayInfo(MString("
+                // previous value [20266] -  ") + this->soloColorsValues[20266]);
                 editSoloColorSet(meshFn);
-                // if (this->colorCommand == 0)meshFn.setCurrentColorSetName(this->fullColorSet);
+                // if (this->colorCommand == 0) meshFn.setCurrentColorSetName(this->fullColorSet);
                 // else meshFn.setCurrentColorSetName(this->soloColorSet);
                 this->reloadSoloColor = false;
+                // if (this->soloColorsValues .length() > 20266) MGlobal::displayInfo(MString(" post
+                // value     [20266] -  ") + this->soloColorsValues[20266]);
             } else if (this->applyPaint) {
                 if (verbose) MGlobal::displayInfo("  -- > applyPaint  ");
                 this->applyPaint = false;
@@ -358,7 +362,6 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                                 // MGlobal::displayInfo(MString(" paint value ") + i + MString(" -
                                 // ") + val);
                                 this->paintedValues[i] = val;  // store to not repaint
-                                this->soloColorsValues[i] = val;
 
                                 val *= intensity;
                                 val = std::log10(val * 9 + 1);
@@ -390,13 +393,16 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
 MStatus blurSkinDisplay::editSoloColorSet(MFnMesh& meshFn) {
     MStatus status;
 
-    MGlobal::displayInfo(" editSoloColorSet CALL ");
+    if (verbose) MGlobal::displayInfo(" editSoloColorSet CALL ");
     MColorArray colToSet;
     MIntArray vtxToSet;
     for (int theVert = 0; theVert < this->soloColorsValues.length(); ++theVert) {
         double val = this->skinWeightList[theVert * this->nbJoints + this->influenceIndex];
+        // if (theVert == 20266) MGlobal::displayInfo(MString("
+        // Mesh_X_HeadBody_Pc_Sd1_SdDsp_.vtx[20266] -  ") + val + MString(" - storeValue ") +
+        // this->soloColorsValues[theVert]);
 
-        if (val != this->soloColorsValues[theVert]) {
+        if (this->soloColorsValues[theVert] != val) {
             MColor soloColor;
             val *= 2;
             if (val > 1)
