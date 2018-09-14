@@ -56,6 +56,7 @@ class blurSkinDisplay : public MPxNode {
     bool callUndo = false;
     bool autoExpand = false;
     int colorCommand = 0;
+    int changedColorInfluence = -1;
     bool reloadSoloColor = false;
     bool inputVerticesChanged = false;
     int influenceIndex = 0, commandIndex = 0, smoothRepeat = 3, smoothDepth = 1;
@@ -77,6 +78,7 @@ class blurSkinDisplay : public MPxNode {
     void refreshVertsConnection();
     void getConnectedSkinCluster();
     void connectSkinClusterWL();
+    void setInfluenceColorAttr();
     MStatus getAttributes(MDataBlock& dataBlock);
     MStatus applyCommand(MDataBlock& dataBlock, MIntArray& theEditVerts,
                          MDoubleArray& verticesWeight, bool storeUndo = true);
@@ -110,6 +112,7 @@ class blurSkinDisplay : public MPxNode {
     static MObject _colorType;
     static MObject _smoothDepth;
     static MObject _smoothRepeat;
+    static MObject _influenceColor;
     static MObject _influenceAttr;
     static MObject _autoExpandAttr;
 
