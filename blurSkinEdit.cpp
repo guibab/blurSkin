@@ -13,6 +13,7 @@ MObject blurSkinDisplay::_callUndo;
 MObject blurSkinDisplay::_postSetting;
 MObject blurSkinDisplay::_commandAttr;
 MObject blurSkinDisplay::_colorType;
+MObject blurSkinDisplay::_soloColorType;
 MObject blurSkinDisplay::_smoothRepeat;
 MObject blurSkinDisplay::_smoothDepth;
 MObject blurSkinDisplay::_influenceAttr;
@@ -34,20 +35,28 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
     MDataHandle smoothRepeatData = dataBlock.inputValue(_smoothRepeat);
     MDataHandle smoothDepthData = dataBlock.inputValue(_smoothDepth);
     MDataHandle postSettingData = dataBlock.inputValue(_postSetting);
-    MDataHandle colorTypeData = dataBlock.inputValue(_colorType);
     MDataHandle autoExpandData = dataBlock.inputValue(_autoExpandAttr);
     MDataHandle getLockWeightsData = dataBlock.inputValue(_getLockWeights);
 
-    int prevInfluenceIndex = this->influenceIndex;
+    MDataHandle colorTypeData = dataBlock.inputValue(_colorType);
     int prevColorCommand = this->colorCommand;
+    this->colorCommand = colorTypeData.asShort();
+    if (verbose) MGlobal::displayInfo(MString(" colorCommand   ") + this->colorCommand + " - ");
+
+    MDataHandle soloColorTypeData = dataBlock.inputValue(_soloColorType);
+    int prevSoloColorType = this->soloColorTypeVal;
+    this->soloColorTypeVal = soloColorTypeData.asShort();
+    if (verbose) MGlobal::displayInfo(MString(" soloColorType  ") + this->soloColorTypeVal + " - ");
+
+    int prevInfluenceIndex = this->influenceIndex;
     bool prevAutoExpand = this->autoExpand;
     bool prevLockWeights = this->refreshLockWeights;
 
     this->refreshLockWeights = getLockWeightsData.asBool();
     this->influenceIndex = influenceData.asInt();
-    this->commandIndex = commandData.asInt();
+    this->commandIndex = commandData.asShort();
     this->smoothRepeat = smoothRepeatData.asInt();
-    this->colorCommand = colorTypeData.asInt();
+
     this->autoExpand = autoExpandData.asBool();
     int smoothDepthVal = smoothDepthData.asInt();
 
@@ -94,33 +103,31 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
     if (verbose) MGlobal::displayInfo(MString(" influenceIndex ") + this->influenceIndex + " - ");
     if (verbose) MGlobal::displayInfo(MString(" smoothRepeat   ") + this->smoothRepeat + " - ");
     if (verbose) MGlobal::displayInfo(MString(" smoothDepth    ") + this->smoothDepth + " - ");
-    if (verbose) MGlobal::displayInfo(MString(" colorCommand   ") + this->colorCommand + " - ");
-    if (verbose)
-        MGlobal::displayInfo(MString(" LockWeights    ") + this->refreshLockWeights + " - ");
 
     this->reloadCommand = false;
     this->applyPaint = false;
 
     this->reloadSoloColor = false;
     if (this->colorCommand == 1)
-        this->reloadSoloColor = (prevColorCommand != this->colorCommand) ||
+        this->reloadSoloColor = (prevSoloColorType != this->soloColorTypeVal) ||
+                                (prevColorCommand != this->colorCommand) ||
                                 (prevInfluenceIndex != this->influenceIndex);
+    /*
 
     if (prevColorCommand != this->colorCommand) {
-        /*
-        MFnSkinCluster theSkinCluster(this->skinCluster_);
-        MObjectArray objectsDeformed;
-        theSkinCluster.getOutputGeometry(objectsDeformed);
-        MFnDependencyNode deformedNameMesh(objectsDeformed[0]);
-        //setAttr - type "string" Mesh_X_HeadBody_Pc_Sd1_SdDsp_Shape.currentColorSet
-        "soloColorsSet"; MPlug currentColorSet = deformedNameMesh.findPlug("currentColorSet");
+            MFnSkinCluster theSkinCluster(this->skinCluster_);
+            MObjectArray objectsDeformed;
+            theSkinCluster.getOutputGeometry(objectsDeformed);
+            MFnDependencyNode deformedNameMesh(objectsDeformed[0]);
+            //setAttr - type "string" Mesh_X_HeadBody_Pc_Sd1_SdDsp_Shape.currentColorSet
+    "soloColorsSet"; MPlug currentColorSet = deformedNameMesh.findPlug("currentColorSet");
 
-        if (this->colorCommand == 0)
-                currentColorSet.setValue(this->fullColorSet);
-        else
-                currentColorSet.setValue(this->soloColorSet);
-        */
+            if (this->colorCommand == 0)
+                    currentColorSet.setValue(this->fullColorSet);
+            else
+                    currentColorSet.setValue(this->soloColorSet);
     }
+    */
 
     if (verbose) MGlobal::displayInfo(MString(" reloadSoloColor ") + this->reloadSoloColor + " - ");
 
@@ -233,15 +240,14 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 MColor white(1, 1, 1), multColor;
                 float intensity = 1.0;
                 // 0 Add - 1 Remove - 2 AddPercent - 3 Absolute - 4 Smooth - 5 Sharpen - 6 Colors
-
                 if ((commandIndex < 4) && (influenceIndex > -1))
-                    multColor = .7 * this->jointsColors[influenceIndex] +
-                                .3 * white;  // paint a little whiter
+                    // multColor = .7*this->jointsColors[influenceIndex] + .3*white; // paint a
+                    // little whiter
+                    multColor = this->jointsColors[influenceIndex];
                 else {
                     multColor = white;
-                    intensity = .7;
+                    intensity = float(0.1);
                 }
-
                 MColorArray multiEditColors, soloEditColors;
                 MIntArray editVertsIndices;
                 MDoubleArray editVertsWeights;
@@ -424,14 +430,19 @@ MStatus blurSkinDisplay::editSoloColorSet(MFnMesh& meshFn) {
         // Mesh_X_HeadBody_Pc_Sd1_SdDsp_.vtx[20266] -  ") + val + MString(" - storeValue ") +
         // this->soloColorsValues[theVert]);
 
-        if (this->soloColorsValues[theVert] != val) {
+        if (!(this->soloColorsValues[theVert] == 0 && val == 0)) {
             MColor soloColor;
-            val *= 2;
-            if (val > 1)
-                soloColor = MColor(val, (val - 1), 0);
-            else
-                soloColor = MColor(val, 0, 0);
-
+            if (this->soloColorTypeVal == 0) {
+                soloColor = MColor(val, val, val);
+            } else if (this->soloColorTypeVal == 1) {
+                val *= 2;
+                if (val > 1)
+                    soloColor = MColor(val, (val - 1), 0);
+                else
+                    soloColor = MColor(val, 0, 0);
+            } else {
+                soloColor = val * this->jointsColors[this->influenceIndex];
+            }
             this->soloCurrentColors[theVert] = soloColor;
             this->soloColorsValues[theVert] = val;
             colToSet.append(soloColor);
@@ -608,11 +619,18 @@ MStatus blurSkinDisplay::refreshColors(MIntArray& editVertsIndices, MColorArray&
             multiColor += jointsColors[j] * val;
             if (j == this->influenceIndex) {
                 this->soloColorsValues[i] = val;
-                val *= 2;
-                if (val > 1)
-                    soloColor = MColor(val, (val - 1), 0);
-                else
-                    soloColor = MColor(val, 0, 0);
+
+                if (this->soloColorTypeVal == 0) {
+                    soloColor = MColor(val, val, val);
+                } else if (this->soloColorTypeVal == 1) {
+                    val *= 2;
+                    if (val > 1)
+                        soloColor = MColor(val, (val - 1), 0);
+                    else
+                        soloColor = MColor(val, 0, 0);
+                } else {
+                    soloColor = val * this->jointsColors[this->influenceIndex];
+                }
             }
         }
         this->multiCurrentColors[theVert] = multiColor;
@@ -856,7 +874,7 @@ MStatus blurSkinDisplay::initialize() {
     ///////////////////////////////////////////////////////////////////////////
     // creation attributes
     ///////////////////////////////////////////////////////////////////////////
-    MFnEnumAttribute enumAttr;
+    MFnEnumAttribute enumAttr, enumAttr2;
 
     blurSkinDisplay::_commandAttr = enumAttr.create("command", "cmd", 0);
     CHECK_MSTATUS(enumAttr.addField("Add", 0));
@@ -896,7 +914,7 @@ MStatus blurSkinDisplay::initialize() {
     blurSkinDisplay::_colorType = enumAttr.create("colorType", "cty", 0);
     CHECK_MSTATUS(enumAttr.addField("Multi", 0));
     CHECK_MSTATUS(enumAttr.addField("Solo", 1));
-    // CHECK_MSTATUS(enumAttr.addField("None", 2));
+    CHECK_MSTATUS(enumAttr.addField("None", 2));
     CHECK_MSTATUS(enumAttr.setStorable(true));
     CHECK_MSTATUS(enumAttr.setKeyable(true));
     CHECK_MSTATUS(enumAttr.setReadable(true));
@@ -904,6 +922,19 @@ MStatus blurSkinDisplay::initialize() {
     CHECK_MSTATUS(enumAttr.setCached(false));
 
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_colorType);
+
+    blurSkinDisplay::_soloColorType = enumAttr.create("soloColType", "scty", 0);
+    CHECK_MSTATUS(enumAttr.addField("white", 0));
+    CHECK_MSTATUS(enumAttr.addField("Lava", 1));
+    CHECK_MSTATUS(enumAttr.addField("Influence", 2));
+    CHECK_MSTATUS(enumAttr.setStorable(true));
+    CHECK_MSTATUS(enumAttr.setKeyable(true));
+    CHECK_MSTATUS(enumAttr.setReadable(true));
+    CHECK_MSTATUS(enumAttr.setWritable(true));
+    CHECK_MSTATUS(enumAttr.setCached(false));
+
+    status = blurSkinDisplay::addAttribute(blurSkinDisplay::_soloColorType);
+
     ///////////////////////////////////////////////////////////////////////////
     // Initialize skin weights multi attributes
     ///////////////////////////////////////////////////////////////////////////
@@ -970,7 +1001,7 @@ MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
                           plugBeingDirtied == _smoothRepeat || plugBeingDirtied == _smoothDepth ||
                           plugBeingDirtied == _postSetting || plugBeingDirtied == _colorType ||
                           plugBeingDirtied == _cpList || plugBeingDirtied == _getLockWeights ||
-                          plugBeingDirtied == _autoExpandAttr;
+                          plugBeingDirtied == _soloColorType || plugBeingDirtied == _autoExpandAttr;
 
     this->clearTheArray = (plugBeingDirtied == _clearArray);
     this->callUndo = (plugBeingDirtied == _callUndo);

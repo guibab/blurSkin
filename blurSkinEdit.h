@@ -53,11 +53,15 @@ class blurSkinDisplay : public MPxNode {
     int fullVertexListLength = 0;
 
     MIntArray lockJoints, lockVertices;
-    bool applyPaint = false, clearTheArray = false, reloadCommand = true, postSetting = true,
-         refreshLockWeights = -false;
+    bool applyPaint = false;
+    bool clearTheArray = false;
+    bool reloadCommand = true;
+    bool postSetting = true;
+    bool refreshLockWeights = false;
     bool callUndo = false;
     bool autoExpand = false;
-    int colorCommand = 0;
+    int colorCommand = 0;      // multi
+    int soloColorTypeVal = 1;  // 1 lava
     int changedColorInfluence = -1;
     bool reloadSoloColor = false;
     bool inputVerticesChanged = false;
@@ -112,6 +116,7 @@ class blurSkinDisplay : public MPxNode {
     static MObject _postSetting;
     static MObject _commandAttr;
     static MObject _colorType;
+    static MObject _soloColorType;
     static MObject _smoothDepth;
     static MObject _smoothRepeat;
     static MObject _influenceColor;
