@@ -211,6 +211,7 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                     MPlug callLockWeightsPlug(thisMObject(), _getLockWeights);
                     callLockWeightsPlug.setBool(false);
                 }
+                this->refreshLockWeights = false;
                 dataBlock.setClean(plug);
                 return status;
             } else if (this->reloadSoloColor) {
@@ -468,7 +469,8 @@ MStatus blurSkinDisplay::applyCommand(MDataBlock& dataBlock, MIntArray& theEditV
                                               this->lockJoints, this->skinWeightList, theWeights);
                 }
             } else {
-                status = editArray(commandIndex, influenceIndex, this->nbJoints,
+                if (this->lockJoints[influenceIndex] == 1) return status;  //  if locked do nothing
+                status = editArray(commandIndex, influenceIndex, this->nbJoints, this->lockJoints,
                                    this->skinWeightList, theEditVerts, verticesWeight, theWeights);
             }
             // now set the weights -----------------------------------------------------

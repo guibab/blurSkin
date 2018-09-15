@@ -317,8 +317,9 @@ MStatus getListColors(MObject& skinCluster, int nbVertices, MColorArray& currCol
     return MS::kSuccess;
 }
 
-MStatus editArray(int command, int influence, int nbJoints, MDoubleArray& fullWeightArray,
-                  MIntArray& vertices, MDoubleArray& verticesWeight, MDoubleArray& theWeights) {
+MStatus editArray(int command, int influence, int nbJoints, MIntArray& lockJoints,
+                  MDoubleArray& fullWeightArray, MIntArray& vertices, MDoubleArray& verticesWeight,
+                  MDoubleArray& theWeights) {
     MStatus stat;
     // 0 Add - 1 Remove - 2 AddPercent - 3 Absolute - 4 Smooth - 5 Sharpen - 6 Colors
 
@@ -395,25 +396,23 @@ MStatus setAverageWeight(MIntArray& verticesAround, int currentVertex, int index
         int posi = currentVertex * nbJoints + j;
         sumWeigths[j] /= sizeVertices;
 
-        if (!lockJoints[j]) {
-            total += sumWeigths[j];
-            totalBaseVtx += fullWeightArray[posi];
-            assign += 1;
-        } else {
-            MGlobal::displayInfo("  -- > lockJoints   " + j);
-        }
+        // if (!lockJoints[j]) {
+        total += sumWeigths[j];
+        totalBaseVtx += fullWeightArray[posi];
+        assign += 1;
+        //}
     }
     if (total > 0. && totalBaseVtx > 0.) {
         double mult = totalBaseVtx / total;
         // std::cout << "\n vtx [" << currentVertex << "]" << " total " << total << "\n";
         for (j = 0; j < nbJoints; j++) {
             int posiToSet = indexCurrVert * nbJoints + j;
-            if (!lockJoints[j]) {
-                sumWeigths[j] *= mult;  // normalement divide par 1, sauf cas lock joints
-                                        // std::cout << " " << sumWeigths[j];
-                // theWeights.set(sumWeigths[j], posiToSet );
-                theWeights[posiToSet] = sumWeigths[j];
-            }
+            // if (!lockJoints[j]) {
+            sumWeigths[j] *= mult;  // normalement divide par 1, sauf cas lock joints
+                                    // std::cout << " " << sumWeigths[j];
+            // theWeights.set(sumWeigths[j], posiToSet );
+            theWeights[posiToSet] = sumWeigths[j];
+            //}
         }
     }
     return MS::kSuccess;
