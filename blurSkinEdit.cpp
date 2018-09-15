@@ -237,15 +237,20 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 /////////////////////////////////////////////////////////////////
                 // consider painted attribute --------
                 /////////////////////////////////////////////////////////////////
-                MColor white(1, 1, 1), multColor;
+                MColor white(1, 1, 1), multColor, soloMultColor;
                 float intensity = 1.0;
                 // 0 Add - 1 Remove - 2 AddPercent - 3 Absolute - 4 Smooth - 5 Sharpen - 6 Colors
-                if ((commandIndex < 4) && (influenceIndex > -1))
+                if ((commandIndex < 4) && (influenceIndex > -1)) {
                     // multColor = .7*this->jointsColors[influenceIndex] + .3*white; // paint a
                     // little whiter
                     multColor = this->jointsColors[influenceIndex];
-                else {
+                    if (this->soloColorTypeVal == 2)
+                        soloMultColor = this->jointsColors[influenceIndex];
+                    else
+                        soloMultColor = white;
+                } else {
                     multColor = white;
+                    soloMultColor = white;
                     intensity = float(0.1);
                 }
                 MColorArray multiEditColors, soloEditColors;
@@ -395,7 +400,7 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                                 val = std::log10(val * 9 + 1);
                                 multiEditColors.append(val * multColor +
                                                        (1.0 - val) * this->multiCurrentColors[i]);
-                                soloEditColors.append(val * white +
+                                soloEditColors.append(val * soloMultColor +
                                                       (1.0 - val) * this->soloCurrentColors[i]);
                             }
                         }
