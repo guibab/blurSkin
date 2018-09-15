@@ -207,6 +207,33 @@ MStatus getListColorsJoints(MObject& skinCluster, MColorArray& jointsColors) {
     return stat;
 }
 
+MStatus getListLockJoints(MObject& skinCluster, MIntArray& jointsLocks) {
+    MStatus stat;
+
+    MFnDependencyNode skinClusterDep(skinCluster);
+    MPlug influenceColor_plug = skinClusterDep.findPlug("lockWeights");
+    int nbJoints = influenceColor_plug.numElements();
+    jointsLocks.clear();
+    jointsLocks.setLength(nbJoints);
+
+    for (int i = 0; i < nbJoints; ++i) {
+        // weightList[i]
+        MPlug lockPlug = influenceColor_plug.elementByPhysicalIndex(i);
+        if (lockPlug.isConnected()) {
+            MPlugArray connections;
+            lockPlug.connectedTo(connections, true, false);
+            if (connections.length() > 0) {
+                MPlug theConn = connections[0];
+                jointsLocks.set(theConn.asInt(), i);
+            } else
+                jointsLocks.set(0, i);
+        } else {
+            jointsLocks.set(lockPlug.asInt(), i);
+        }
+        // MGlobal::displayInfo(lockPlug.name() + " " + jointsLocks [i]);
+    }
+    return stat;
+}
 MStatus getListColors(MObject& skinCluster, int nbVertices, MColorArray& currColors,
                       bool useMPlug) {
     MStatus stat;
@@ -301,6 +328,13 @@ MStatus editArray(int command, int influence, int nbJoints, MDoubleArray& fullWe
         double theVal = verticesWeight[i];
 
         double currentW = fullWeightArray[theVert * nbJoints + influence];
+        if (((command == 1) || (command == 3)) &&
+            (currentW > 0.99999)) {  // value is one we cant do anything
+            for (int j = 0; j < nbJoints; ++j)
+                theWeights[i * nbJoints + j] = fullWeightArray[theVert * nbJoints + j];
+            continue;
+        }
+
         double newW = currentW;
         if (command == 0)
             newW += theVal;  // ADD
@@ -316,19 +350,21 @@ MStatus editArray(int command, int influence, int nbJoints, MDoubleArray& fullWe
         double oldRest = 1.0 - currentW;
         double div = oldRest / newRest;
 
+        double finalSum = 0.0;
         for (int j = 0; j < nbJoints; ++j) {
+            // check the zero val ----------
             if (j != influence) {
                 if (newW == 1.0)
                     theWeights[i * nbJoints + j] = 0.0;
-                else {
+                else
                     theWeights[i * nbJoints + j] = fullWeightArray[theVert * nbJoints + j] / div;
-                }
             } else
-                theWeights[i * nbJoints + influence] = newW;
-
-            // fullWeightArray[theVert*nbJoints + j] = verticesWeight[i] * theWeights[i*nbJoints +
-            // j] + (1.0 - verticesWeight[i]) * fullWeightArray[theVert*nbJoints + j];
+                theWeights[i * nbJoints + j] = newW;
+            finalSum += theWeights[i * nbJoints + j];
         }
+        if (finalSum < .01)  // zero problem revert weights
+            for (int j = 0; j < nbJoints; ++j)
+                theWeights[i * nbJoints + j] = fullWeightArray[theVert * nbJoints + j];
     }
     return stat;
 }

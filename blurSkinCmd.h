@@ -60,7 +60,8 @@ class blurSkinCmd : public MPxCommand {
         kCommandAverage,
         kCommandHelp,
         kCommandQuery,
-        kCommandSetColors
+        kCommandSetColors,
+        kCommandGetZeroInfluences
     };
 
     MStatus doIt(const MArgList&);
@@ -72,11 +73,12 @@ class blurSkinCmd : public MPxCommand {
     void getTypeOfSurface();
     MStatus getListLockJoints();
     MStatus getAllWeights();
+    MIntArray getZeroInfluences();
     MStatus useAllVertices();
     MStatus executeAction();
     MStatus setColors();
     MStatus printWeigth(int vertex, int u = 0, int v = 0);
-    MStatus getSoftSelection();
+    MStatus getSoftSelection(bool getSoft = true);
     bool isUndoable() const;
     static void* creator();
     static MSyntax newSyntax();
@@ -123,6 +125,9 @@ class blurSkinCmd : public MPxCommand {
     const static char* kRespectLocksFlagShort;
     const static char* kRespectLocksFlagLong;
 
+    const static char* kZeroInfluencesFlagShort;
+    const static char* kZeroInfluencesFlagLong;
+
     const static char* kCommandFlagShort;
     const static char* kCommandFlagLong;
 
@@ -154,6 +159,7 @@ class blurSkinCmd : public MPxCommand {
 
     MSelectionList selectionList_; /**< Selected command input nodes. */
     CommandMode command_;          // the command type
+    bool getZeroInfluences_ = false;
     bool verbose, respectLocks_;
     bool isNurbsSurface_, isMeshSurface_, isNurbsCurve_, isBezierCurve_;
     bool useSelection = false;

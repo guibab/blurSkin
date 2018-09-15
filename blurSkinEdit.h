@@ -43,6 +43,7 @@ class blurSkinDisplay : public MPxNode {
     MDoubleArray soloColorsValues;
     MString fullColorSet = MString("multiColorsSet");
     MString soloColorSet = MString("soloColorsSet");
+    MString noColorSet = MString("noColorsSet");
 
     MDoubleArray paintedValues;
     MIntArray fullVvertexList;
@@ -52,7 +53,8 @@ class blurSkinDisplay : public MPxNode {
     int fullVertexListLength = 0;
 
     MIntArray lockJoints, lockVertices;
-    bool applyPaint = false, clearTheArray = false, reloadCommand = true, postSetting = true;
+    bool applyPaint = false, clearTheArray = false, reloadCommand = true, postSetting = true,
+         refreshLockWeights = -false;
     bool callUndo = false;
     bool autoExpand = false;
     int colorCommand = 0;
@@ -115,6 +117,7 @@ class blurSkinDisplay : public MPxNode {
     static MObject _influenceColor;
     static MObject _influenceAttr;
     static MObject _autoExpandAttr;
+    static MObject _getLockWeights;
 
     static MObject _s_per_joint_weights;
     static MObject _s_skin_weights;

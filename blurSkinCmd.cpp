@@ -45,6 +45,9 @@ const char* blurSkinCmd::kDepthFlagLong = "-depth";
 const char* blurSkinCmd::kRespectLocksFlagShort = "-rl";
 const char* blurSkinCmd::kRespectLocksFlagLong = "-respectLocks";
 
+const char* blurSkinCmd::kZeroInfluencesFlagShort = "-zi";
+const char* blurSkinCmd::kZeroInfluencesFlagLong = "-zeroInfluences";
+
 const char* blurSkinCmd::kCommandFlagShort = "-c";
 const char* blurSkinCmd::kCommandFlagLong = "-command";
 
@@ -57,34 +60,32 @@ Displays command instructions.
 void DisplayHelp() {
     MString help;
     help += "Flags:\n";
-    help += "-skinCluster (-skn):         String     Name of the skinCluster\n";
+    help += "-skinCluster         -skn   String     Name of the skinCluster\n";
     help +=
-        "-meshName (-mn):             String	 Name of the mesh if skincluster is not passed\n";
+        "-meshName            -mn    String	 Name of the mesh if skincluster is not passed\n";
     help +=
         "                                        If -skn and -mn are not passed uses selection\n";
-    help += "-skinClusterIndex (-si):     Int        Index of SkinCluster if -mn passed  \n";
+    help += "-skinClusterIndex    -si    Int        Index of SkinCluster if -mn passed  \n";
     help += "                                        Default 0\n";
     help +=
-        "-percentMvt (-pc):           Float      Between 0. and 1. percent of value set default "
+        "-percentMvt          -pc    Float      Between 0. and 1. percent of value set default "
         "1.\n";
-    help += "-verbose (-vrb):               N/A        Verbose print\n";
-    help += "-listCVsIndices (-lcv)       Strings    List cvs indices [(u1, v1), (u2, v2), ...]\n";
-    help += "-listVerticesIndices (-li)   Strings    List vertices indices\n";
-    help += "-listVerticesWeight (-lw)    Doubles    List vertices weights\n";
-    help += "-listJoints         (-lj)    String     List joints names\n";
-    help += "-listJointsValues   (-ljw)   Doubles    List joints weights\n";
+    help += "-verbose             -vrb   N/A        Verbose print\n";
+    help += "-listCVsIndices      -lcv   Strings    List cvs indices [(u1, v1), (u2, v2), ...]\n";
+    help += "-listVerticesIndices -li    Strings    List vertices indices\n";
+    help += "-listVerticesWeight  -lw    Doubles    List vertices weights\n";
+    help += "-listJoints          -lj    String     List joints names\n";
+    help += "-listJointsValues    -ljw   Doubles    List joints weights\n";
+    help += "-repeat              -rp    Int        Repeat the calculation             default 1\n";
+    help += "-depth               -d     Int        Depth for the smooth               default 1\n";
     help +=
-        "-repeat (-rp)                Int        Repeat the calculation             default 1\n";
-    help +=
-        "-depth (-d):                 Int        Depth for the smooth               default 1\n";
-    help +=
-        "-respectLocks (-rl):         N/A        Respect locks                      default True "
-        "\n";
-    help += "-command (-c):               N/A        the command action correct inputs are :\n";
+        "-respectLocks        -rl    N/A        Respect locks                      default True \n";
+    help += "-zeroInfluences      -zi    N/A        get zero columns \n";
+    help += "-command             -c     N/A        the command action correct inputs are :\n";
     help +=
         "                                        smooth - add - absolute - percentage - average - "
         "colors\n";
-    help += "-help (-h)                   N/A        Display this text.\n";
+    help += "-help                -h     N/A        Display this text.\n";
     MGlobal::displayInfo(help);
 }
 
@@ -116,6 +117,7 @@ MSyntax blurSkinCmd::newSyntax() {
     syntax.addFlag(kRepeatFlagShort, kRepeatFlagLong, MSyntax::kLong);
     syntax.addFlag(kDepthFlagShort, kDepthFlagLong, MSyntax::kLong);
     syntax.addFlag(kRespectLocksFlagShort, kRespectLocksFlagLong);
+    syntax.addFlag(kZeroInfluencesFlagShort, kZeroInfluencesFlagLong);
 
     syntax.addFlag(kCommandFlagShort, kCommandFlagLong, MSyntax::kString);
 
@@ -133,182 +135,6 @@ blurSkinCmd::blurSkinCmd()
       respectLocks_(true),
       verbose(false) {}
 
-MStatus blurSkinCmd::GatherCommandArguments(const MArgList& args) {
-    if (verbose) MGlobal::displayInfo(MString(" ---- GatherCommandArguments ----"));
-    MStatus status;
-    MArgDatabase argData(syntax(), args);
-    // argData.getObjects(selectionList_);
-    // display help  --------------------------------------------------------------------------
-    if (argData.isFlagSet(kHelpFlagShort)) {
-        command_ = kCommandHelp;
-        return MS::kSuccess;
-    }
-
-    // get the type of the command -------------------------------------------------------
-    if (argData.isFlagSet(kCommandFlagShort)) {
-        MString commandStringName = argData.flagArgumentString(kCommandFlagShort, 0, &status);
-        if (commandStringName == "smooth")
-            command_ = kCommandSmooth;
-        else if (commandStringName == "add")
-            command_ = kCommandAdd;
-        else if (commandStringName == "absolute")
-            command_ = kCommandAbsolute;
-        else if (commandStringName == "percentage")
-            command_ = kCommandPercentage;
-        else if (commandStringName == "average")
-            command_ = kCommandAverage;
-        else if (commandStringName == "colors")
-            command_ = kCommandSetColors;
-    }
-    // overwrites commands
-    // --------------------------------------------------------------------------
-    if (argData.isFlagSet(kQueryFlagShort)) {
-        command_ = kCommandQuery;
-    }
-    // get basic arguments ----------------------------------------------------------------------
-    if (argData.isFlagSet(kVerboseFlagShort))
-        verbose = argData.flagArgumentBool(kVerboseFlagShort, 0, &status);
-
-    if (argData.isFlagSet(kRepeatFlagShort))
-        repeat_ = argData.flagArgumentInt(kRepeatFlagShort, 0, &status);
-
-    if (argData.isFlagSet(kPercentMovementFlagShort))
-        percentMvt_ = argData.flagArgumentDouble(kPercentMovementFlagShort, 0, &status);
-
-    if (argData.isFlagSet(kDepthFlagShort))
-        depth_ = argData.flagArgumentInt(kDepthFlagShort, 0, &status);
-
-    if (argData.isFlagSet(kRespectLocksFlagShort))
-        respectLocks_ = argData.flagArgumentBool(kRespectLocksFlagShort, 0, &status);
-
-    // get list input joints  --------------------------------------------------------------------
-    if (argData.isFlagSet(kListJointsFlagShort)) {
-        int nbUse = argData.numberOfFlagUses(kListJointsFlagShort);
-        MString toDisplay("List Joints : ");
-        for (int i = 0; i < nbUse; i++) {
-            MArgList flagArgs;
-            argData.getFlagArgumentList(kListJointsFlagShort, i, flagArgs);
-            MString jointName;
-            flagArgs.get(0, jointName);
-            listJoints_.append(jointName);
-            toDisplay += jointName;
-            toDisplay += MString(" - ");
-        }
-        if (verbose) MGlobal::displayInfo(toDisplay);
-    }
-    if (argData.isFlagSet(kListJointsValuesFlagShort)) {
-        int nbUse = argData.numberOfFlagUses(kListJointsValuesFlagShort);
-        MString toDisplay("Joints values : ");
-        for (int i = 0; i < nbUse; i++) {
-            MArgList flagArgs;
-            argData.getFlagArgumentList(kListJointsValuesFlagShort, i, flagArgs);
-            double value;
-            flagArgs.get(0, value);
-            listJointsValues_.append(value);
-            toDisplay += value;
-            toDisplay += MString(" - ");
-        }
-        if (verbose) MGlobal::displayInfo(toDisplay);
-    }
-
-    // get list input vertices --------------------------------------------------------------------
-    bool foundListVerticesIndices = false;
-    int nbVerts = 0;
-    if (argData.isFlagSet(kListCVsIndicesFlagShort)) {
-        int nbUse = argData.numberOfFlagUses(kListCVsIndicesFlagShort);
-        MString toDisplay("List CVs : ");
-        for (int i = 0; i < nbUse; i++) {
-            MArgList flagArgs;
-            argData.getFlagArgumentList(kListCVsIndicesFlagShort, i, flagArgs);
-            int uIndex, vIndex;
-            flagArgs.get(0, uIndex);
-            flagArgs.get(1, vIndex);
-            indicesU_.append(uIndex);
-            indicesV_.append(vIndex);
-            toDisplay += uIndex;
-            toDisplay += MString("_");
-            toDisplay += vIndex;
-            toDisplay += MString(" - ");
-        }
-        if (verbose) MGlobal::displayInfo(toDisplay);
-        foundListVerticesIndices = true;
-        nbVerts = indicesU_.length();
-    } else if (argData.isFlagSet(kListVerticesIndicesFlagShort)) {
-        foundListVerticesIndices = true;
-        int nbUse = argData.numberOfFlagUses(kListVerticesIndicesFlagShort);
-        MString toDisplay("List Vertices : ");
-        for (int i = 0; i < nbUse; i++) {
-            MArgList flagArgs;
-            argData.getFlagArgumentList(kListVerticesIndicesFlagShort, i, flagArgs);
-            int vtxIndex;
-            flagArgs.get(0, vtxIndex);
-            indicesVertices_.append(vtxIndex);
-            toDisplay += vtxIndex;
-            toDisplay += MString(" - ");
-        }
-        if (verbose) MGlobal::displayInfo(toDisplay);
-        nbVerts = indicesVertices_.length();
-    }
-    if (argData.isFlagSet(kListVerticesWeightFlagShort)) {
-        int nbUse = argData.numberOfFlagUses(kListVerticesWeightFlagShort);
-        MString toDisplay("Weight Vertices : ");
-        for (int i = 0; i < nbUse; i++) {
-            MArgList flagArgs;
-            argData.getFlagArgumentList(kListVerticesWeightFlagShort, i, flagArgs);
-            double vtxWeight;
-            flagArgs.get(0, vtxWeight);
-            weightVertices_.append(float(vtxWeight));
-            toDisplay += vtxWeight;
-            toDisplay += MString(" - ");
-        }
-        if (verbose) MGlobal::displayInfo(toDisplay);
-    } else if (foundListVerticesIndices) {
-        for (int i = 0; i < nbVerts; i++) weightVertices_.append(1.0);
-    }
-
-    // get index skinCluster (default 0) -------------------------------------------------------
-    if (argData.isFlagSet(kIndexSkinClusterFlagShort)) {
-        indSkinCluster_ = argData.flagArgumentInt(kIndexSkinClusterFlagShort, 0, &status);
-    }
-
-    // get input skinCluster name -------------------------------------------------------
-    bool foundSkinCluster = false;
-    useSelection = true;
-
-    if (argData.isFlagSet(kSkinClusterNameFlagShort)) {
-        MString skinClusterName = argData.flagArgumentString(kSkinClusterNameFlagShort, 0, &status);
-        MSelectionList selList;
-        MGlobal::getSelectionListByName(skinClusterName, selList);
-        selList.getDependNode(0, skinCluster_);
-
-        MFnDependencyNode nodeFn(skinCluster_);
-        if (verbose) MGlobal::displayInfo(MString("    input skin name: ") + nodeFn.name());
-
-        selList.clear();
-        foundSkinCluster = true;
-        // now get the mesh .... seems to CRASH
-        useSelection = false;
-
-    }  // OR get input mesh name
-    if (argData.isFlagSet(kMeshNameFlagShort)) {
-        MString meshName = argData.flagArgumentString(kMeshNameFlagShort, 0, &status);
-        MSelectionList selList;
-        MGlobal::getSelectionListByName(meshName, selList);
-        selList.getDagPath(0, meshPath_);
-        selList.clear();
-        //
-        if (!foundSkinCluster)
-            status = findSkinCluster(meshPath_, skinCluster_, indSkinCluster_, verbose);
-        useSelection = false;
-
-    } else if (foundSkinCluster) {
-        status = findMesh(skinCluster_, meshPath_, verbose);
-    }
-    // now get input of vertices indices (if selection the return already done previously)
-    //-------------------------------------------------------
-
-    return MS::kSuccess;
-}
 MStatus blurSkinCmd::getListLockJoints() {
     if (verbose) MGlobal::displayInfo(MString(" ---- get list lock joints ----"));
     MStatus stat;
@@ -459,6 +285,7 @@ MStatus blurSkinCmd::getAverageWeight(MIntArray vertices, int currentVertex) {
     verboseSetWeights(currentVertex);
     return MS::kSuccess;
 }
+
 void blurSkinCmd::verboseSetWeights(int currentVertex) {
     if (verbose) {
         MString toDisplay("new weigth of vtx (");
@@ -576,14 +403,18 @@ MStatus blurSkinCmd::addWeights(int currentVertex) {
     return MS::kSuccess;
 }
 
-MStatus blurSkinCmd::getSoftSelection() {
+MStatus blurSkinCmd::getSoftSelection(bool getSoft) {
     if (verbose) MGlobal::displayInfo(MString("---- getSoftSelection ----"));
     MStatus stat;
 
-    MRichSelection richSel;
-    MGlobal::getRichSelection(richSel);
     MSelectionList richSelList;
-    richSel.getSelection(richSelList);
+    if (getSoft) {
+        MRichSelection richSel;
+        MGlobal::getRichSelection(richSel);
+        richSel.getSelection(richSelList);
+    } else {
+        MGlobal::getActiveSelectionList(richSelList);
+    }
 
     for (MItSelectionList iter(richSelList, MFn::kInvalid); !iter.isDone(); iter.next()) {
         // MDagPath meshPath_;
@@ -659,6 +490,7 @@ MStatus blurSkinCmd::getSoftSelection() {
     }
     return MS::kSuccess;
 }
+
 MStatus blurSkinCmd::useAllVertices() {
     if (verbose) MGlobal::displayInfo(MString("---- useAllVertices ----"));
 
@@ -725,200 +557,42 @@ MStatus blurSkinCmd::setColors() {
     meshFn.setDisplayColors(true);
     return stat;
 }
-MStatus blurSkinCmd::executeAction() {
-    if (verbose) MGlobal::displayInfo(MString(" ---- executeAction ----"));
-    MStatus stat;
-    if (verbose) {
-        if (component.isNull())
-            MGlobal::displayInfo(MString(" component is null "));
-        else
-            MGlobal::displayInfo(MString(" component is NOT null "));
-        if (component.apiType() == MFn::kMeshVertComponent)
-            MGlobal::displayInfo(MString(" component is vertices"));
-        else
-            MGlobal::displayInfo(MString(" component is NOT vertices"));
-    }
 
-    // 1 first get list locked joints
-    getListLockJoints();
-    // 2 get all weights of vertices
-    getAllWeights();
-    if (command_ == kCommandSetColors) {
-        if (verbose) MGlobal::displayInfo(MString(" ---- set Colors ----"));
-        setColors();
-    } else if (command_ == kCommandQuery) {
-        if (verbose) MGlobal::displayInfo(MString(" ---- QUERY RETURN ----"));
-        int nbVertices = indicesVertices_.length();
-        int index, j, posiToSet;
-        int nbJntsInput = jointsInputIndices_.length();
-        if (verbose) {
-            MString toDisplay = MString("joints indices ");
-            for (int k = 0; k < nbJntsInput; ++k) {
-                j = jointsInputIndices_[k];
-                toDisplay += MString("  ") + j;
-            }
-            MGlobal::displayInfo(toDisplay);
-        }
+MIntArray blurSkinCmd::getZeroInfluences() {
+    MStatus status = MS::kSuccess;
+    // This plug is an array (one element for each vertex in your mesh
+    MFnDependencyNode skinClusterDep(skinCluster_);
 
-        //------- now do the setting ----------
-        for (int i = 0; i < nbVertices; ++i) {
-            index = indicesVertices_[i];
-            // for (int j = 0; j<nbJoints; ++j) {
-            for (int k = 0; k < nbJntsInput; ++k) {
-                j = jointsInputIndices_[k];
-                if (j == -1) {
-                    appendToResult(-1.);
-                } else {
-                    posiToSet = index * nbJoints + j;
-                    appendToResult(newWeights[posiToSet]);
-                    // if (perJointAddingValues_[j] != 0) {
-                }
-            }
-        }
-        // appendToResult(1.0);
-        return MS::kSuccess;
-
-    } else if (command_ == kCommandAverage) {
-        MDoubleArray averageWeights;
-        int index;
-        int nbVertices = indicesVertices_.length();
-        for (int j = 0; j < nbJoints; j++) {
-            double sumJointWeights = 0;
-            for (int i = 0; i < nbVertices; ++i) {
-                index = indicesVertices_[i];
-                int posiToSet = index * nbJoints + j;
-                sumJointWeights += newWeights[posiToSet];
-            }
-            averageWeights.append(sumJointWeights / nbVertices);
-        }
-        //------- now do the setting ----------
-        for (int i = 0; i < nbVertices; ++i) {
-            for (int j = 0; j < nbJoints; j++) {
-                index = indicesVertices_[i];
-                int posiToSet = index * nbJoints + j;
-                newWeights.set(averageWeights[j], posiToSet);
-            }
-        }
-        currentWeights.copy(newWeights);
-    } else if (isNurbsSurface_) {
-        int index, storedU, storedV;
-        MIntArray vertices;
-
-        for (int r = 0; r < repeat_; r++) {
-            if (verbose) MGlobal::displayInfo(MString("repeat nb :") + r);
-            for (int i = 0; i < indicesVertices_.length(); ++i) {
-                index = indicesVertices_[i];
-                storedU = indicesU_[i];
-                storedV = indicesV_[i];
-                if (verbose)
-                    MGlobal::displayInfo(MString("stored are          U :") + storedU +
-                                         MString(" V :") + storedV);
-
-                if (verbose) stat = printWeigth(index, storedU, storedV);
-                if (command_ != kCommandSmooth) {
-                    addWeights(index);
-                } else {
-                    vertices.clear();
-                    /*
-                    for (int d = 0; d < depth_; d++) { // <= to add one more
-                            CVsAround(storedU, storedV, numCVsInU, numCVsInV, UIsPeriodic,
-                    VIsPeriodic, vertices);
-                    }
-                    */
-                    CVsAround(storedU, storedV, numCVsInU_, numCVsInV_, UIsPeriodic_, VIsPeriodic_,
-                              vertices);
-                    stat = getAverageWeight(vertices, index);
-                }
-            }
-            currentWeights.copy(newWeights);
-        }
-    } else if (isMeshSurface_) {  // component.apiType() == MFn::kMeshVertComponent) {
-        // 3 cycle through all vertices
-        MItMeshVertex itVertex(meshPath_, component, &stat);
-        MIntArray vertices, repeatVertices, tmpVertices;
-        MItMeshVertex itTempVertex(meshPath_);
-        int prevIndex;
-        // repeat the function
-        for (int r = 0; r < repeat_; r++) {
-            while (!itVertex.isDone()) {
-                int currentVertex = itVertex.index();
-                if (verbose) MGlobal::displayInfo(MString(" vtx :") + currentVertex);
-                if (verbose) stat = printWeigth(currentVertex);
-
-                if (command_ == kCommandSmooth) {
-                    // here depth of get vertices connected
-                    itVertex.getConnectedVertices(vertices);
-                    // check the depth
-                    if (depth_ > 1) {
-                        // init the array
-                        std::unordered_set<int> setOfVerts;
-                        for (unsigned int itVtx = 0; itVtx < vertices.length(); itVtx++)
-                            setOfVerts.insert(vertices[itVtx]);
-                        // for the repeats
-                        std::unordered_set<int> setOfVertsTmp;
-                        for (int d = 1; d < depth_; d++) {  // <= to add one more
-                            setOfVertsTmp.clear();
-                            for (int vtx : setOfVerts) {
-                                itTempVertex.setIndex(vtx, prevIndex);
-                                itTempVertex.getConnectedVertices(repeatVertices);
-                                for (unsigned int itVtx = 0; itVtx < repeatVertices.length();
-                                     itVtx++)
-                                    setOfVertsTmp.insert(repeatVertices[itVtx]);
-                            }
-                            for (int vtx : setOfVertsTmp) setOfVerts.insert(vtx);
-                        }
-                        // now set the MIntArray
-                        vertices.clear();
-                        for (int vtx : setOfVerts) vertices.append(vtx);
-                    }
-                    stat = getAverageWeight(vertices, currentVertex);
-                } else
-                    addWeights(currentVertex);
-
-                itVertex.next();
-            }
-            currentWeights.copy(newWeights);
-            itVertex.reset();
-        }
-    }
-    // FINAL PART SETTING THE WEIGHTS --------------------------------------------
-    // we make it short first
-    weightsForSetting.clear();
-    double oppositePercentMvt = 1.0 - percentMvt_;
-    // for all the vertices
-    int i = 0, currentVertex, start, end, index;
-    double theNewWeight;
-
-    float influence;
-    int currentWeightsLength = currentWeights.length();
+    MPlug weight_list_plug = skinClusterDep.findPlug("weightList");
+    MIntArray jointUsed(nbJoints, 0);
+    int nbAt1 = 0;
     for (int i = 0; i < indicesVertices_.length(); ++i) {
-        currentVertex = indicesVertices_[i];
-        influence = weightVertices_[i];
-        start = currentVertex * nbJoints;
-        end = start + nbJoints;
-        for (index = start; index < end; index++) {
-            // set percentage
-            if (index >= currentWeightsLength) {
-                if (verbose)
-                    MGlobal::displayInfo(MString(" BREAK currentVertex :") + currentVertex +
-                                         MString(" index  :") + index);
-                break;
-            }
-            theNewWeight =
-                currentWeights[index] * percentMvt_ + fullOrigWeights[index] * oppositePercentMvt;
-            // set the influence value
-            theNewWeight = theNewWeight * influence + fullOrigWeights[index] * (1. - influence);
+        if (nbAt1 == nbJoints) break;  // allFound
 
-            if (isMeshSurface_)
-                weightsForSetting.append(theNewWeight);
-            else if (isNurbsSurface_)
-                newWeights.set(theNewWeight, index);
+        int vertexIndex = indicesVertices_[i];
+        // weightList[i]
+        MPlug ith_weights_plug = weight_list_plug.elementByLogicalIndex(vertexIndex);
+
+        // weightList[i].weight
+        MPlug plug_weights = ith_weights_plug.child(0);  // access first compound child
+        int nb_weights = plug_weights.numElements();
+
+        for (int j = 0; j < nb_weights; j++) {  // for each joint
+            MPlug weight_plug = plug_weights.elementByPhysicalIndex(j);
+            // weightList[i].weight[j]
+            int indexInfluence = weight_plug.logicalIndex();
+            if (jointUsed[indexInfluence] == 0) {  // check the value if zero or not
+                double theWeight = weight_plug.asDouble();
+                if (theWeight != 0) {
+                    jointUsed[indexInfluence] = 1;
+                    nbAt1++;
+                }
+            }
         }
     }
+    if (verbose) MGlobal::displayInfo(" get zero Columns ");
 
-    // now set the values
-    redoIt();
-    return MS::kFailure;
+    return jointUsed;
 }
 
 MStatus blurSkinCmd::getAllWeights() {
@@ -1013,6 +687,188 @@ void blurSkinCmd::getTypeOfSurface() {
     }
 }
 
+MStatus blurSkinCmd::GatherCommandArguments(const MArgList& args) {
+    if (verbose) MGlobal::displayInfo(MString(" ---- GatherCommandArguments ----"));
+    MStatus status;
+    MArgDatabase argData(syntax(), args);
+    // argData.getObjects(selectionList_);
+    // display help  --------------------------------------------------------------------------
+    if (argData.isFlagSet(kHelpFlagShort)) {
+        command_ = kCommandHelp;
+        return MS::kSuccess;
+    }
+
+    // get the type of the command -------------------------------------------------------
+    if (argData.isFlagSet(kCommandFlagShort)) {
+        MString commandStringName = argData.flagArgumentString(kCommandFlagShort, 0, &status);
+        if (commandStringName == "smooth")
+            command_ = kCommandSmooth;
+        else if (commandStringName == "add")
+            command_ = kCommandAdd;
+        else if (commandStringName == "absolute")
+            command_ = kCommandAbsolute;
+        else if (commandStringName == "percentage")
+            command_ = kCommandPercentage;
+        else if (commandStringName == "average")
+            command_ = kCommandAverage;
+        else if (commandStringName == "colors")
+            command_ = kCommandSetColors;
+    }
+    // overwrites commands
+    // --------------------------------------------------------------------------
+    if (argData.isFlagSet(kQueryFlagShort)) {
+        command_ = kCommandQuery;
+    }
+    // get basic arguments ----------------------------------------------------------------------
+    if (argData.isFlagSet(kVerboseFlagShort))
+        verbose = argData.flagArgumentBool(kVerboseFlagShort, 0, &status);
+
+    if (argData.isFlagSet(kRepeatFlagShort))
+        repeat_ = argData.flagArgumentInt(kRepeatFlagShort, 0, &status);
+
+    if (argData.isFlagSet(kPercentMovementFlagShort))
+        percentMvt_ = argData.flagArgumentDouble(kPercentMovementFlagShort, 0, &status);
+
+    if (argData.isFlagSet(kDepthFlagShort))
+        depth_ = argData.flagArgumentInt(kDepthFlagShort, 0, &status);
+
+    if (argData.isFlagSet(kRespectLocksFlagShort))
+        respectLocks_ = argData.flagArgumentBool(kRespectLocksFlagShort, 0, &status);
+
+    if (argData.isFlagSet(kZeroInfluencesFlagShort)) {
+        getZeroInfluences_ = argData.flagArgumentBool(kZeroInfluencesFlagShort, 0, &status);
+        command_ = kCommandGetZeroInfluences;
+    }
+
+    // get list input joints  --------------------------------------------------------------------
+    if (argData.isFlagSet(kListJointsFlagShort)) {
+        int nbUse = argData.numberOfFlagUses(kListJointsFlagShort);
+        MString toDisplay("List Joints : ");
+        for (int i = 0; i < nbUse; i++) {
+            MArgList flagArgs;
+            argData.getFlagArgumentList(kListJointsFlagShort, i, flagArgs);
+            MString jointName;
+            flagArgs.get(0, jointName);
+            listJoints_.append(jointName);
+            toDisplay += jointName;
+            toDisplay += MString(" - ");
+        }
+        if (verbose) MGlobal::displayInfo(toDisplay);
+    }
+    if (argData.isFlagSet(kListJointsValuesFlagShort)) {
+        int nbUse = argData.numberOfFlagUses(kListJointsValuesFlagShort);
+        MString toDisplay("Joints values : ");
+        for (int i = 0; i < nbUse; i++) {
+            MArgList flagArgs;
+            argData.getFlagArgumentList(kListJointsValuesFlagShort, i, flagArgs);
+            double value;
+            flagArgs.get(0, value);
+            listJointsValues_.append(value);
+            toDisplay += value;
+            toDisplay += MString(" - ");
+        }
+        if (verbose) MGlobal::displayInfo(toDisplay);
+    }
+
+    // get list input vertices --------------------------------------------------------------------
+    bool foundListVerticesIndices = false;
+    int nbVerts = 0;
+    if (argData.isFlagSet(kListCVsIndicesFlagShort)) {
+        int nbUse = argData.numberOfFlagUses(kListCVsIndicesFlagShort);
+        MString toDisplay("List CVs : ");
+        for (int i = 0; i < nbUse; i++) {
+            MArgList flagArgs;
+            argData.getFlagArgumentList(kListCVsIndicesFlagShort, i, flagArgs);
+            int uIndex, vIndex;
+            flagArgs.get(0, uIndex);
+            flagArgs.get(1, vIndex);
+            indicesU_.append(uIndex);
+            indicesV_.append(vIndex);
+            toDisplay += uIndex;
+            toDisplay += MString("_");
+            toDisplay += vIndex;
+            toDisplay += MString(" - ");
+        }
+        if (verbose) MGlobal::displayInfo(toDisplay);
+        foundListVerticesIndices = true;
+        nbVerts = indicesU_.length();
+    } else if (argData.isFlagSet(kListVerticesIndicesFlagShort)) {
+        foundListVerticesIndices = true;
+        int nbUse = argData.numberOfFlagUses(kListVerticesIndicesFlagShort);
+        MString toDisplay("List Vertices : ");
+        for (int i = 0; i < nbUse; i++) {
+            MArgList flagArgs;
+            argData.getFlagArgumentList(kListVerticesIndicesFlagShort, i, flagArgs);
+            int vtxIndex;
+            flagArgs.get(0, vtxIndex);
+            indicesVertices_.append(vtxIndex);
+            toDisplay += vtxIndex;
+            toDisplay += MString(" - ");
+        }
+        if (verbose) MGlobal::displayInfo(toDisplay);
+        nbVerts = indicesVertices_.length();
+    }
+    if (argData.isFlagSet(kListVerticesWeightFlagShort)) {
+        int nbUse = argData.numberOfFlagUses(kListVerticesWeightFlagShort);
+        MString toDisplay("Weight Vertices : ");
+        for (int i = 0; i < nbUse; i++) {
+            MArgList flagArgs;
+            argData.getFlagArgumentList(kListVerticesWeightFlagShort, i, flagArgs);
+            double vtxWeight;
+            flagArgs.get(0, vtxWeight);
+            weightVertices_.append(float(vtxWeight));
+            toDisplay += vtxWeight;
+            toDisplay += MString(" - ");
+        }
+        if (verbose) MGlobal::displayInfo(toDisplay);
+    } else if (foundListVerticesIndices) {
+        for (int i = 0; i < nbVerts; i++) weightVertices_.append(1.0);
+    }
+
+    // get index skinCluster (default 0) -------------------------------------------------------
+    if (argData.isFlagSet(kIndexSkinClusterFlagShort)) {
+        indSkinCluster_ = argData.flagArgumentInt(kIndexSkinClusterFlagShort, 0, &status);
+    }
+
+    // get input skinCluster name -------------------------------------------------------
+    bool foundSkinCluster = false;
+    useSelection = true;
+
+    if (argData.isFlagSet(kSkinClusterNameFlagShort)) {
+        MString skinClusterName = argData.flagArgumentString(kSkinClusterNameFlagShort, 0, &status);
+        MSelectionList selList;
+        MGlobal::getSelectionListByName(skinClusterName, selList);
+        selList.getDependNode(0, skinCluster_);
+
+        MFnDependencyNode nodeFn(skinCluster_);
+        if (verbose) MGlobal::displayInfo(MString("    input skin name: ") + nodeFn.name());
+
+        selList.clear();
+        foundSkinCluster = true;
+        // now get the mesh .... seems to CRASH
+        useSelection = false;
+
+    }  // OR get input mesh name
+    if (argData.isFlagSet(kMeshNameFlagShort)) {
+        MString meshName = argData.flagArgumentString(kMeshNameFlagShort, 0, &status);
+        MSelectionList selList;
+        MGlobal::getSelectionListByName(meshName, selList);
+        selList.getDagPath(0, meshPath_);
+        selList.clear();
+        //
+        if (!foundSkinCluster)
+            status = findSkinCluster(meshPath_, skinCluster_, indSkinCluster_, verbose);
+        useSelection = false;
+
+    } else if (foundSkinCluster) {
+        status = findMesh(skinCluster_, meshPath_, verbose);
+    }
+    // now get input of vertices indices (if selection the return already done previously)
+    //-------------------------------------------------------
+
+    return MS::kSuccess;
+}
+
 MStatus blurSkinCmd::doIt(const MArgList& args) {
     MStatus stat;
     MString info;
@@ -1038,7 +894,7 @@ MStatus blurSkinCmd::doIt(const MArgList& args) {
 
     // create the component
     if (useSelection) {
-        getSoftSelection();
+        getSoftSelection();  // dont get soft selection
         stat = findSkinCluster(meshPath_, skinCluster_, indSkinCluster_, verbose);
     } else {
         getTypeOfSurface();
@@ -1083,6 +939,209 @@ MStatus blurSkinCmd::doIt(const MArgList& args) {
 
     return MS::kSuccess;
 }
+
+MStatus blurSkinCmd::executeAction() {
+    if (verbose) MGlobal::displayInfo(MString(" ---- executeAction ----"));
+    MStatus stat;
+    if (verbose) {
+        if (component.isNull())
+            MGlobal::displayInfo(MString(" component is null "));
+        else
+            MGlobal::displayInfo(MString(" component is NOT null "));
+        if (component.apiType() == MFn::kMeshVertComponent)
+            MGlobal::displayInfo(MString(" component is vertices"));
+        else
+            MGlobal::displayInfo(MString(" component is NOT vertices"));
+    }
+
+    if (command_ == kCommandGetZeroInfluences) {
+        MIntArray usedInfluences = getZeroInfluences();
+        for (int i = 0; i < usedInfluences.length(); ++i) appendToResult(usedInfluences[i]);
+        return MS::kSuccess;
+    }
+
+    // 1 first get list locked joints
+    getListLockJoints();
+    // 2 get all weights of vertices
+    getAllWeights();
+    if (command_ == kCommandSetColors) {
+        if (verbose) MGlobal::displayInfo(MString(" ---- set Colors ----"));
+        setColors();
+    } else if (command_ == kCommandQuery) {
+        if (verbose) MGlobal::displayInfo(MString(" ---- QUERY RETURN ----"));
+        int nbVertices = indicesVertices_.length();
+        int index, j, posiToSet;
+        int nbJntsInput = jointsInputIndices_.length();
+        if (verbose) {
+            MString toDisplay = MString("joints indices ");
+            for (int k = 0; k < nbJntsInput; ++k) {
+                j = jointsInputIndices_[k];
+                toDisplay += MString("  ") + j;
+            }
+            MGlobal::displayInfo(toDisplay);
+        }
+
+        //------- now do the setting ----------
+        for (int i = 0; i < nbVertices; ++i) {
+            index = indicesVertices_[i];
+            // for (int j = 0; j<nbJoints; ++j) {
+            for (int k = 0; k < nbJntsInput; ++k) {
+                j = jointsInputIndices_[k];
+                if (j == -1) {
+                    appendToResult(-1.);
+                } else {
+                    posiToSet = index * nbJoints + j;
+                    appendToResult(newWeights[posiToSet]);
+                    // if (perJointAddingValues_[j] != 0) {
+                }
+            }
+        }
+        // appendToResult(1.0);
+        return MS::kSuccess;
+
+    } else if (command_ == kCommandAverage) {
+        MDoubleArray averageWeights;
+        int index;
+        int nbVertices = indicesVertices_.length();
+        for (int j = 0; j < nbJoints; j++) {
+            double sumJointWeights = 0;
+            for (int i = 0; i < nbVertices; ++i) {
+                index = indicesVertices_[i];
+                int posiToSet = index * nbJoints + j;
+                sumJointWeights += newWeights[posiToSet];
+            }
+            averageWeights.append(sumJointWeights / nbVertices);
+        }
+        //------- now do the setting ----------
+        for (int i = 0; i < nbVertices; ++i) {
+            for (int j = 0; j < nbJoints; j++) {
+                index = indicesVertices_[i];
+                int posiToSet = index * nbJoints + j;
+                newWeights.set(averageWeights[j], posiToSet);
+            }
+        }
+        currentWeights.copy(newWeights);
+    } else if (isNurbsSurface_) {
+        int index, storedU, storedV;
+        MIntArray vertices;
+
+        for (int r = 0; r < repeat_; r++) {
+            if (verbose) MGlobal::displayInfo(MString("repeat nb :") + r);
+            for (int i = 0; i < indicesVertices_.length(); ++i) {
+                index = indicesVertices_[i];
+                storedU = indicesU_[i];
+                storedV = indicesV_[i];
+                if (verbose)
+                    MGlobal::displayInfo(MString("stored are          U :") + storedU +
+                                         MString(" V :") + storedV);
+
+                if (verbose) stat = printWeigth(index, storedU, storedV);
+                if (command_ != kCommandSmooth) {
+                    addWeights(index);
+                } else {
+                    vertices.clear();
+                    /*
+                    for (int d = 0; d < depth_; d++) { // <= to add one more
+                    CVsAround(storedU, storedV, numCVsInU, numCVsInV, UIsPeriodic, VIsPeriodic,
+                    vertices);
+                    }
+                    */
+                    CVsAround(storedU, storedV, numCVsInU_, numCVsInV_, UIsPeriodic_, VIsPeriodic_,
+                              vertices);
+                    stat = getAverageWeight(vertices, index);
+                }
+            }
+            currentWeights.copy(newWeights);
+        }
+    } else if (isMeshSurface_) {  // component.apiType() == MFn::kMeshVertComponent) {
+                                  // 3 cycle through all vertices
+        MItMeshVertex itVertex(meshPath_, component, &stat);
+        MIntArray vertices, repeatVertices, tmpVertices;
+        MItMeshVertex itTempVertex(meshPath_);
+        int prevIndex;
+        // repeat the function
+        for (int r = 0; r < repeat_; r++) {
+            while (!itVertex.isDone()) {
+                int currentVertex = itVertex.index();
+                if (verbose) MGlobal::displayInfo(MString(" vtx :") + currentVertex);
+                if (verbose) stat = printWeigth(currentVertex);
+
+                if (command_ == kCommandSmooth) {
+                    // here depth of get vertices connected
+                    itVertex.getConnectedVertices(vertices);
+                    // check the depth
+                    if (depth_ > 1) {
+                        // init the array
+                        std::unordered_set<int> setOfVerts;
+                        for (unsigned int itVtx = 0; itVtx < vertices.length(); itVtx++)
+                            setOfVerts.insert(vertices[itVtx]);
+                        // for the repeats
+                        std::unordered_set<int> setOfVertsTmp;
+                        for (int d = 1; d < depth_; d++) {  // <= to add one more
+                            setOfVertsTmp.clear();
+                            for (int vtx : setOfVerts) {
+                                itTempVertex.setIndex(vtx, prevIndex);
+                                itTempVertex.getConnectedVertices(repeatVertices);
+                                for (unsigned int itVtx = 0; itVtx < repeatVertices.length();
+                                     itVtx++)
+                                    setOfVertsTmp.insert(repeatVertices[itVtx]);
+                            }
+                            for (int vtx : setOfVertsTmp) setOfVerts.insert(vtx);
+                        }
+                        // now set the MIntArray
+                        vertices.clear();
+                        for (int vtx : setOfVerts) vertices.append(vtx);
+                    }
+                    stat = getAverageWeight(vertices, currentVertex);
+                } else
+                    addWeights(currentVertex);
+
+                itVertex.next();
+            }
+            currentWeights.copy(newWeights);
+            itVertex.reset();
+        }
+    }
+    // FINAL PART SETTING THE WEIGHTS --------------------------------------------
+    // we make it short first
+    weightsForSetting.clear();
+    double oppositePercentMvt = 1.0 - percentMvt_;
+    // for all the vertices
+    int i = 0, currentVertex, start, end, index;
+    double theNewWeight;
+
+    float influence;
+    int currentWeightsLength = currentWeights.length();
+    for (int i = 0; i < indicesVertices_.length(); ++i) {
+        currentVertex = indicesVertices_[i];
+        influence = weightVertices_[i];
+        start = currentVertex * nbJoints;
+        end = start + nbJoints;
+        for (index = start; index < end; index++) {
+            // set percentage
+            if (index >= currentWeightsLength) {
+                if (verbose)
+                    MGlobal::displayInfo(MString(" BREAK currentVertex :") + currentVertex +
+                                         MString(" index  :") + index);
+                break;
+            }
+            theNewWeight =
+                currentWeights[index] * percentMvt_ + fullOrigWeights[index] * oppositePercentMvt;
+            // set the influence value
+            theNewWeight = theNewWeight * influence + fullOrigWeights[index] * (1. - influence);
+
+            if (isMeshSurface_)
+                weightsForSetting.append(theNewWeight);
+            else if (isNurbsSurface_)
+                newWeights.set(theNewWeight, index);
+        }
+    }
+
+    // now set the values
+    redoIt();
+    return MS::kFailure;
+}
+
 MStatus blurSkinCmd::redoIt() {
     MStatus stat;
 

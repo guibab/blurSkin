@@ -17,6 +17,7 @@ MObject blurSkinDisplay::_smoothRepeat;
 MObject blurSkinDisplay::_smoothDepth;
 MObject blurSkinDisplay::_influenceAttr;
 MObject blurSkinDisplay::_influenceColor;
+MObject blurSkinDisplay::_getLockWeights;
 MObject blurSkinDisplay::_autoExpandAttr;
 MObject blurSkinDisplay::_s_per_joint_weights;
 MObject blurSkinDisplay::_s_skin_weights;
@@ -35,11 +36,14 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
     MDataHandle postSettingData = dataBlock.inputValue(_postSetting);
     MDataHandle colorTypeData = dataBlock.inputValue(_colorType);
     MDataHandle autoExpandData = dataBlock.inputValue(_autoExpandAttr);
+    MDataHandle getLockWeightsData = dataBlock.inputValue(_getLockWeights);
 
     int prevInfluenceIndex = this->influenceIndex;
     int prevColorCommand = this->colorCommand;
     bool prevAutoExpand = this->autoExpand;
+    bool prevLockWeights = this->refreshLockWeights;
 
+    this->refreshLockWeights = getLockWeightsData.asBool();
     this->influenceIndex = influenceData.asInt();
     this->commandIndex = commandData.asInt();
     this->smoothRepeat = smoothRepeatData.asInt();
@@ -90,7 +94,9 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
     if (verbose) MGlobal::displayInfo(MString(" influenceIndex ") + this->influenceIndex + " - ");
     if (verbose) MGlobal::displayInfo(MString(" smoothRepeat   ") + this->smoothRepeat + " - ");
     if (verbose) MGlobal::displayInfo(MString(" smoothDepth    ") + this->smoothDepth + " - ");
-    if (verbose) MGlobal::displayInfo(MString(" colorCommand    ") + this->colorCommand + " - ");
+    if (verbose) MGlobal::displayInfo(MString(" colorCommand   ") + this->colorCommand + " - ");
+    if (verbose)
+        MGlobal::displayInfo(MString(" LockWeights    ") + this->refreshLockWeights + " - ");
 
     this->reloadCommand = false;
     this->applyPaint = false;
@@ -190,8 +196,23 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
 
                 meshFn.setColors(this->soloCurrentColors, &this->soloColorSet);
                 meshFn.assignColors(fullVvertexList, &this->soloColorSet);
+
+                meshFn.createColorSetDataMesh(this->noColorSet);  // for no colors
                 // locks joints // all unlock
                 this->lockJoints = MIntArray(nbVertices, 0);
+                getListLockJoints(skinCluster_, this->lockJoints);
+
+            } else if (this->refreshLockWeights) {  // get list of locks
+                MDataHandle callRefreshLocksData = dataBlock.inputValue(_getLockWeights);
+                bool callRefreshLocksVal = callRefreshLocksData.asBool();
+
+                if (callRefreshLocksVal) {
+                    getListLockJoints(skinCluster_, this->lockJoints);
+                    MPlug callLockWeightsPlug(thisMObject(), _getLockWeights);
+                    callLockWeightsPlug.setBool(false);
+                }
+                dataBlock.setClean(plug);
+                return status;
             } else if (this->reloadSoloColor) {
                 // if (this->soloColorsValues.length() > 20266)MGlobal::displayInfo(MString("
                 // previous value [20266] -  ") + this->soloColorsValues[20266]);
@@ -450,7 +471,7 @@ MStatus blurSkinDisplay::applyCommand(MDataBlock& dataBlock, MIntArray& theEditV
                 status = editArray(commandIndex, influenceIndex, this->nbJoints,
                                    this->skinWeightList, theEditVerts, verticesWeight, theWeights);
             }
-            // now set the weights
+            // now set the weights -----------------------------------------------------
             for (int i = 0; i < theEditVerts.length(); ++i) {
                 int theVert = theEditVerts[i];
                 for (int j = 0; j < this->nbJoints; ++j) {
@@ -827,6 +848,9 @@ MStatus blurSkinDisplay::initialize() {
         numAtt.create("callUndo", "cu", MFnNumericData::kBoolean, false, &status);
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_callUndo);
 
+    blurSkinDisplay::_getLockWeights =
+        numAtt.create("getLockWeights", "glw", MFnNumericData::kBoolean, false, &status);
+    status = blurSkinDisplay::addAttribute(blurSkinDisplay::_getLockWeights);
     ///////////////////////////////////////////////////////////////////////////
     // creation attributes
     ///////////////////////////////////////////////////////////////////////////
@@ -943,7 +967,8 @@ MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
     this->reloadCommand = plugBeingDirtied == _commandAttr || plugBeingDirtied == _influenceAttr ||
                           plugBeingDirtied == _smoothRepeat || plugBeingDirtied == _smoothDepth ||
                           plugBeingDirtied == _postSetting || plugBeingDirtied == _colorType ||
-                          plugBeingDirtied == _cpList || plugBeingDirtied == _autoExpandAttr;
+                          plugBeingDirtied == _cpList || plugBeingDirtied == _getLockWeights ||
+                          plugBeingDirtied == _autoExpandAttr;
 
     this->clearTheArray = (plugBeingDirtied == _clearArray);
     this->callUndo = (plugBeingDirtied == _callUndo);
@@ -965,7 +990,6 @@ MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
             }
         }
     }
-
     if ((plugBeingDirtied == _paintableAttr) || this->reloadCommand || this->clearTheArray ||
         this->callUndo || this->changedColorInfluence) {
         this->applyPaint = true;

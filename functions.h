@@ -38,6 +38,7 @@ MStatus findOrigMesh(MObject& theSkinCluster, MObject& origMesh, bool verbose);
 MStatus getListColors(MObject& skinCluster, int nbVertices, MColorArray& currColors,
                       bool useMPlug = false);
 MStatus getListColorsJoints(MObject& skinCluster, MColorArray& jointsColors);
+MStatus getListLockJoints(MObject& skinCluster, MIntArray& jointsLocks);
 MStatus editArray(int command, int influence, int nbJoints, MDoubleArray& fullWeightArray,
                   MIntArray& vertices, MDoubleArray& verticesWeight, MDoubleArray& theWeights);
 MStatus setAverageWeight(MIntArray& verticesAround, int currentVertex, int indexCurrVert,
