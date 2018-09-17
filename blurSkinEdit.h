@@ -56,17 +56,22 @@ class blurSkinDisplay : public MPxNode {
     bool applyPaint = false;
     bool clearTheArray = false;
     bool reloadCommand = true;
-    bool postSetting = true;
+    bool postSetting = true;  // we apply paint as ssons as attr is changed
+    bool postSetting_timeToStoreUndo =
+        true;  // we store the undo for post setting after mouse release
     bool refreshLockWeights = false;
     bool callUndo = false;
+    bool doNormalize = true;
     bool autoExpand = false;
     int colorCommand = 0;      // multi
     int soloColorTypeVal = 1;  // 1 lava
+    int nbAutoExpand = 3;      // autoExpand mode how many time we repeat it
     int changedColorInfluence = -1;
     bool reloadSoloColor = false;
     bool inputVerticesChanged = false;
     int influenceIndex = 0, commandIndex = 0, smoothRepeat = 3, smoothDepth = 1;
     int nbJoints = 0;
+    MIntArray cpIds;  // the ids of the vertices passed as to update skin for
 
     // void resizeVertexIndexes(const unsigned int newSize);
     std::vector<std::vector<std::pair<int, float>>> skin_weights_;
@@ -75,7 +80,7 @@ class blurSkinDisplay : public MPxNode {
     // std::vector< std::vector< int > > undoVertsIndices_;
     // std::vector< std::vector< double > > undoVertsValues_;
 
-    MDoubleArray skinWeightList;
+    MDoubleArray skinWeightList, fullUndoSkinWeightList;
 
     MStatus fillArrayValues(bool doColors = false);
     MStatus querySkinClusterValues(MIntArray& verticesIndices, MDoubleArray& theWeights,
@@ -113,6 +118,7 @@ class blurSkinDisplay : public MPxNode {
     static MObject _paintableAttr;
     static MObject _clearArray;
     static MObject _callUndo;
+    static MObject _normalize;
     static MObject _postSetting;
     static MObject _commandAttr;
     static MObject _colorType;

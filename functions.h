@@ -41,7 +41,7 @@ MStatus getListColorsJoints(MObject& skinCluster, MColorArray& jointsColors);
 MStatus getListLockJoints(MObject& skinCluster, MIntArray& jointsLocks);
 MStatus editArray(int command, int influence, int nbJoints, MIntArray& lockJoints,
                   MDoubleArray& fullWeightArray, MIntArray& vertices, MDoubleArray& verticesWeight,
-                  MDoubleArray& theWeights);
+                  MDoubleArray& theWeights, bool normalize = true);
 MStatus setAverageWeight(MIntArray& verticesAround, int currentVertex, int indexCurrVert,
                          int nbJoints, MIntArray& lockJoints, MDoubleArray& fullWeightArray,
                          MDoubleArray& theWeights);

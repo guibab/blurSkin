@@ -319,53 +319,78 @@ MStatus getListColors(MObject& skinCluster, int nbVertices, MColorArray& currCol
 
 MStatus editArray(int command, int influence, int nbJoints, MIntArray& lockJoints,
                   MDoubleArray& fullWeightArray, MIntArray& vertices, MDoubleArray& verticesWeight,
-                  MDoubleArray& theWeights) {
+                  MDoubleArray& theWeights, bool normalize) {
     MStatus stat;
-    // 0 Add - 1 Remove - 2 AddPercent - 3 Absolute - 4 Smooth - 5 Sharpen - 6 Colors
-
-    // do the add --------------------------
-    for (int i = 0; i < vertices.length(); ++i) {
-        int theVert = vertices[i];
-        double theVal = verticesWeight[i];
-
-        double currentW = fullWeightArray[theVert * nbJoints + influence];
-        if (((command == 1) || (command == 3)) &&
-            (currentW > 0.99999)) {  // value is one we cant do anything
-            for (int j = 0; j < nbJoints; ++j)
-                theWeights[i * nbJoints + j] = fullWeightArray[theVert * nbJoints + j];
-            continue;
+    // 0 Add - 1 Remove - 2 AddPercent - 3 Absolute - 4 Smooth - 5 Sharpen - 6 LockVertices
+    //
+    if (command == 5) {  // sharpen  -----------------------
+        for (int i = 0; i < vertices.length(); ++i) {
+            int theVert = vertices[i];
+            double theVal = verticesWeight[i] + 1.0;
+            double substract = theVal / nbJoints;
+            double sum = 0.0;
+            for (int j = 0; j < nbJoints; ++j) {
+                // check the zero val ----------
+                double jntVal = (fullWeightArray[theVert * nbJoints + j] * theVal) - substract;
+                jntVal = std::max(0.0, std::min(jntVal, 1.0));  // clamp
+                theWeights[i * nbJoints + j] = jntVal;
+                if (normalize) sum += jntVal;
+            }
+            // now normalize
+            if ((normalize) && (sum != 1.0))
+                for (int j = 0; j < nbJoints; ++j) theWeights[i * nbJoints + j] /= sum;
         }
+    } else {
+        // do the command --------------------------
+        for (int i = 0; i < vertices.length(); ++i) {
+            int theVert = vertices[i];
+            double theVal = verticesWeight[i];
 
-        double newW = currentW;
-        if (command == 0)
-            newW += theVal;  // ADD
-        else if (command == 1)
-            newW -= theVal;  // Remove
-        else if (command == 2)
-            newW += theVal * newW;  // AddPercent
-        else if (command == 3)
-            newW = theVal;  // Absolute
+            double currentW = fullWeightArray[theVert * nbJoints + influence];
+            if (((command == 1) || (command == 3)) &&
+                (currentW > 0.99999)) {  // value is 1 we cant do anything
+                for (int j = 0; j < nbJoints; ++j)
+                    theWeights[i * nbJoints + j] = fullWeightArray[theVert * nbJoints + j];
+                continue;
+            }
+            double newW = currentW;
+            if (command == 0)
+                newW += theVal;  // ADD
+            else if (command == 1)
+                newW -= theVal;  // Remove
+            else if (command == 2)
+                newW += theVal * newW;  // AddPercent
+            else if (command == 3)
+                newW = theVal;  // Absolute
 
-        newW = std::max(0.0, std::min(newW, 1.0));  // clamp
-        double newRest = 1.0 - newW;
-        double oldRest = 1.0 - currentW;
-        double div = oldRest / newRest;
+            newW = std::max(0.0, std::min(newW, 1.0));  // clamp
+            double newRest = 1.0 - newW;
+            double oldRest = 1.0 - currentW;
+            double div = oldRest / newRest;
 
-        double finalSum = 0.0;
-        for (int j = 0; j < nbJoints; ++j) {
-            // check the zero val ----------
-            if (j != influence) {
-                if (newW == 1.0)
-                    theWeights[i * nbJoints + j] = 0.0;
-                else
-                    theWeights[i * nbJoints + j] = fullWeightArray[theVert * nbJoints + j] / div;
-            } else
-                theWeights[i * nbJoints + j] = newW;
-            finalSum += theWeights[i * nbJoints + j];
+            double sum = 0.0;
+            for (int j = 0; j < nbJoints; ++j) {
+                // check the zero val ----------
+                if (j != influence) {
+                    if (newW == 1.0)
+                        theWeights[i * nbJoints + j] = 0.0;
+                    else
+                        theWeights[i * nbJoints + j] =
+                            fullWeightArray[theVert * nbJoints + j] / div;
+                } else
+                    theWeights[i * nbJoints + j] = newW;
+
+                if (normalize)
+                    theWeights[i * nbJoints + j] =
+                        std::max(0.0, std::min(theWeights[i * nbJoints + j], 1.0));  // clamp
+                sum += theWeights[i * nbJoints + j];
+            }
+            if (sum < .01)  // zero problem revert weights ----------------------
+                for (int j = 0; j < nbJoints; ++j)
+                    theWeights[i * nbJoints + j] = fullWeightArray[theVert * nbJoints + j];
+            else if (normalize && (sum != 1.0))  // normalize ---------------
+                for (int j = 0; j < nbJoints; ++j) theWeights[i * nbJoints + j] /= sum;
         }
-        if (finalSum < .01)  // zero problem revert weights
-            for (int j = 0; j < nbJoints; ++j)
-                theWeights[i * nbJoints + j] = fullWeightArray[theVert * nbJoints + j];
     }
     return stat;
 }
