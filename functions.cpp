@@ -212,6 +212,7 @@ MStatus getListLockJoints(MObject& skinCluster, MIntArray& jointsLocks) {
 
     MFnDependencyNode skinClusterDep(skinCluster);
     MPlug influenceColor_plug = skinClusterDep.findPlug("lockWeights");
+
     int nbJoints = influenceColor_plug.numElements();
     jointsLocks.clear();
     jointsLocks.setLength(nbJoints);
@@ -234,6 +235,34 @@ MStatus getListLockJoints(MObject& skinCluster, MIntArray& jointsLocks) {
     }
     return stat;
 }
+
+MStatus getListLockVertices(MObject& skinCluster, MIntArray& vertsLocks) {
+    MStatus stat;
+
+    MFnSkinCluster theSkinCluster(skinCluster);
+    MObjectArray objectsDeformed;
+    theSkinCluster.getOutputGeometry(objectsDeformed);
+    MFnDependencyNode deformedNameMesh(objectsDeformed[0]);
+    MPlug currentColorSet = deformedNameMesh.findPlug("lockedVertices");
+
+    MFnDependencyNode skinClusterDep(skinCluster);
+    MPlug weight_list_plug = skinClusterDep.findPlug("weightList");
+    int nbVertices = weight_list_plug.numElements();
+
+    // vertsLocks.clear();
+    MObject Data;
+    stat = currentColorSet.getValue(Data);  // to get the attribute
+
+    MFnIntArrayData intData(Data);
+    MIntArray vertsLocksIndices = intData.array(&stat);
+    vertsLocks.clear();
+    vertsLocks = MIntArray(nbVertices, 0);
+    for (int i = 0; i < vertsLocksIndices.length(); ++i) vertsLocks[vertsLocksIndices[i]] = 1;
+    // MGlobal::displayInfo(MString(" getListLockVertices | ") + currentColorSet.name () + MString("
+    // ") + vertsLocks.length());
+    return stat;
+}
+
 MStatus getListColors(MObject& skinCluster, int nbVertices, MColorArray& currColors,
                       bool useMPlug) {
     MStatus stat;

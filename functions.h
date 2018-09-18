@@ -11,6 +11,7 @@
 #include <maya/MDagPathArray.h>
 #include <maya/MFnDagNode.h>
 #include <maya/MFnDependencyNode.h>
+#include <maya/MFnIntArrayData.h>
 #include <maya/MFnMesh.h>
 #include <maya/MFnSingleIndexedComponent.h>
 #include <maya/MFnSkinCluster.h>
@@ -39,6 +40,7 @@ MStatus getListColors(MObject& skinCluster, int nbVertices, MColorArray& currCol
                       bool useMPlug = false);
 MStatus getListColorsJoints(MObject& skinCluster, MColorArray& jointsColors);
 MStatus getListLockJoints(MObject& skinCluster, MIntArray& jointsLocks);
+MStatus getListLockVertices(MObject& skinCluster, MIntArray& vertsLocks);
 MStatus editArray(int command, int influence, int nbJoints, MIntArray& lockJoints,
                   MDoubleArray& fullWeightArray, MIntArray& vertices, MDoubleArray& verticesWeight,
                   MDoubleArray& theWeights, bool normalize = true);
