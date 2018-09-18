@@ -40,7 +40,7 @@ class blurSkinDisplay : public MPxNode {
     // void displayLayerWeights(const SkinLayer &layer);
     MObject skinCluster_;
     MColorArray multiCurrentColors, jointsColors, soloCurrentColors;
-    MColor lockVertColor = MColor(0.3, 0.3, 0.3);
+    MColor lockVertColor = MColor(0.2, 0.2, 0.2);
 
     MDoubleArray soloColorsValues;
     MString fullColorSet = MString("multiColorsSet");

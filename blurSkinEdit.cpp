@@ -126,6 +126,7 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
         this->reloadSoloColor = (prevSoloColorType != this->soloColorTypeVal) ||
                                 (prevColorCommand != this->colorCommand) ||
                                 (prevInfluenceIndex != this->influenceIndex);
+    if (this->refreshLockWeights) this->applyPaint = true;
     /*
 
     if (prevColorCommand != this->colorCommand) {
@@ -238,20 +239,6 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 this->lockJoints = MIntArray(nbVertices, 0);
                 getListLockJoints(skinCluster_, this->lockJoints);
 
-            } else if (this->refreshLockWeights) {  // get list of locks
-                if (verbose) MGlobal::displayInfo(MString("      --> refreshLockWeights"));
-                MDataHandle callRefreshLocksData = dataBlock.inputValue(_getLockWeights);
-                bool callRefreshLocksVal = callRefreshLocksData.asBool();
-
-                if (callRefreshLocksVal) {
-                    getListLockJoints(skinCluster_, this->lockJoints);
-                    getListLockVertices(skinCluster_, this->lockVertices);
-                    MPlug callLockWeightsPlug(thisMObject(), _getLockWeights);
-                    callLockWeightsPlug.setBool(false);
-                }
-                this->refreshLockWeights = false;
-                dataBlock.setClean(plug);
-                return status;
             } else if (this->reloadSoloColor) {
                 if (verbose) MGlobal::displayInfo(MString("      --> reloadSoloColor  "));
                 // if (this->soloColorsValues.length() > 20266)MGlobal::displayInfo(MString("
@@ -377,6 +364,25 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                         MPlug clearArrayPlug(thisMObject(), _clearArray);
                         clearArrayPlug.setBool(false);
                     }
+                } else if (this->refreshLockWeights) {  // get list of locks
+                    if (verbose) MGlobal::displayInfo(MString("         --> refreshLockWeights"));
+                    MDataHandle callRefreshLocksData = dataBlock.inputValue(_getLockWeights);
+                    bool callRefreshLocksVal = callRefreshLocksData.asBool();
+
+                    MIntArray prevLockVertices;
+                    prevLockVertices.copy(this->lockVertices);
+                    if (callRefreshLocksVal) {
+                        getListLockJoints(skinCluster_, this->lockJoints);
+                        getListLockVertices(skinCluster_, this->lockVertices);
+                        MPlug callLockWeightsPlug(thisMObject(), _getLockWeights);
+                        callLockWeightsPlug.setBool(false);
+                    }
+                    // check new lock vertices ------------------
+                    for (int i = 0; i < prevLockVertices.length(); ++i)
+                        if (prevLockVertices[i] != this->lockVertices[i])
+                            editVertsIndices.append(i);
+                    this->refreshLockWeights = false;
+                    refreshColors(editVertsIndices, multiEditColors, soloEditColors);
                 } else if (this->inputVerticesChanged) {
                     if (verbose)
                         MGlobal::displayInfo(MString("         --> this->inputVerticesChanged ") +
