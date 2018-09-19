@@ -243,15 +243,20 @@ MStatus getListLockVertices(MObject& skinCluster, MIntArray& vertsLocks) {
     MObjectArray objectsDeformed;
     theSkinCluster.getOutputGeometry(objectsDeformed);
     MFnDependencyNode deformedNameMesh(objectsDeformed[0]);
-    MPlug currentColorSet = deformedNameMesh.findPlug("lockedVertices");
+    MPlug lockedVerticesPlug = deformedNameMesh.findPlug("lockedVertices", &stat);
+    if (MS::kSuccess != stat) {
+        MGlobal::displayError(MString("cant find lockerdVertices plug"));
+        return stat;
+    }
 
     MFnDependencyNode skinClusterDep(skinCluster);
     MPlug weight_list_plug = skinClusterDep.findPlug("weightList");
+
     int nbVertices = weight_list_plug.numElements();
 
     // vertsLocks.clear();
     MObject Data;
-    stat = currentColorSet.getValue(Data);  // to get the attribute
+    stat = lockedVerticesPlug.getValue(Data);  // to get the attribute
 
     MFnIntArrayData intData(Data);
     MIntArray vertsLocksIndices = intData.array(&stat);
@@ -262,7 +267,37 @@ MStatus getListLockVertices(MObject& skinCluster, MIntArray& vertsLocks) {
     // ") + vertsLocks.length());
     return stat;
 }
+MStatus editLocks(MObject& skinCluster, MIntArray& inputVertsToLock, bool addToLock,
+                  MIntArray& vertsLocks) {
+    MStatus stat;
 
+    MFnSkinCluster theSkinCluster(skinCluster);
+    MObjectArray objectsDeformed;
+    theSkinCluster.getOutputGeometry(objectsDeformed);
+    MFnDependencyNode deformedNameMesh(objectsDeformed[0]);
+    MPlug lockedVerticesPlug = deformedNameMesh.findPlug("lockedVertices", &stat);
+    if (MS::kSuccess != stat) {
+        MGlobal::displayError(MString("cant find lockerdVertices plug"));
+        return stat;
+    }
+
+    // now expand the array -----------------------
+    int val = 0;
+    if (addToLock) val = 1;
+    for (unsigned int i = 0; i < inputVertsToLock.length(); ++i) {
+        int vtx = inputVertsToLock[i];
+        vertsLocks[vtx] = val;
+    }
+
+    MIntArray theArrayValues;
+    for (unsigned int vtx = 0; vtx < vertsLocks.length(); ++vtx) {
+        if (vertsLocks[vtx] == 1) theArrayValues.append(vtx);
+    }
+    // now set the value ---------------------------
+    MFnIntArrayData tmpIntArray;
+    stat = lockedVerticesPlug.setValue(tmpIntArray.create(theArrayValues));  // to set the attribute
+    return stat;
+}
 MStatus getListColors(MObject& skinCluster, int nbVertices, MColorArray& currColors,
                       bool useMPlug) {
     MStatus stat;

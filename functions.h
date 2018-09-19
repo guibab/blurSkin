@@ -26,6 +26,7 @@
 #include <iomanip>
 #include <iostream>
 #include <random>
+#include <unordered_set>
 #include <vector>
 
 // FUNCTION DECLARATION:
@@ -41,6 +42,8 @@ MStatus getListColors(MObject& skinCluster, int nbVertices, MColorArray& currCol
 MStatus getListColorsJoints(MObject& skinCluster, MColorArray& jointsColors);
 MStatus getListLockJoints(MObject& skinCluster, MIntArray& jointsLocks);
 MStatus getListLockVertices(MObject& skinCluster, MIntArray& vertsLocks);
+MStatus editLocks(MObject& skinCluster, MIntArray& vertsToLock, bool addToLock,
+                  MIntArray& vertsLocks);
 MStatus editArray(int command, int influence, int nbJoints, MIntArray& lockJoints,
                   MDoubleArray& fullWeightArray, MIntArray& vertices, MDoubleArray& verticesWeight,
                   MDoubleArray& theWeights, bool normalize = true);

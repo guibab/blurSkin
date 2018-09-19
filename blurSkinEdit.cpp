@@ -190,7 +190,7 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
 
             getConnectedSkinCluster();                              // get the skinCluster
             getListColorsJoints(skinCluster_, this->jointsColors);  // get the joints colors
-            getListLockVertices(skinCluster_, this->lockVertices);
+            // getListLockVertices(skinCluster_, this->lockVertices);
 
             setInfluenceColorAttr();          // set the colors in our attribute
             status = fillArrayValues(true);   // get the skin data and all the colors
@@ -207,7 +207,6 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 if (verbose) MGlobal::displayInfo(MString("      --> INIT"));
                 this->fullVvertexList.setLength(nbVertices);
                 for (int i = 0; i < nbVertices; ++i) this->fullVvertexList[i] = i;
-                this->init = false;
                 this->paintedValues = MDoubleArray(nbVertices, 0);
                 if (verbose)
                     MGlobal::displayInfo(
@@ -236,10 +235,14 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
 
                 meshFn.createColorSetDataMesh(this->noColorSet);  // for no colors
                 // locks joints // all unlock
-                this->lockJoints = MIntArray(nbVertices, 0);
-                getListLockJoints(skinCluster_, this->lockJoints);
-
-            } else if (this->reloadSoloColor) {
+                this->lockJoints = MIntArray(nbJoints, 0);
+                this->lockVertices = MIntArray(nbVertices, 0);
+                // now get and paint the locks ---------------
+                this->applyPaint = true;
+                this->refreshLockWeights = true;
+                // this->init = false; // init is set at false in the applyPaint refreshLockWeights
+            }
+            if (this->reloadSoloColor) {
                 if (verbose) MGlobal::displayInfo(MString("      --> reloadSoloColor  "));
                 // if (this->soloColorsValues.length() > 20266)MGlobal::displayInfo(MString("
                 // previous value [20266] -  ") + this->soloColorsValues[20266]);
@@ -328,11 +331,9 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                                 }
                             }
                         }
-                        // now set
+                        // now set the values -----
                         for (unsigned int i = 0; i < this->paintedValues.length(); i++) {
-                            if (this->paintedValues[i] != 0 &&
-                                !this->lockVertices[i]) {  // not zero and not locked ----
-                                // multiEditColors.append(this->multiCurrentColors[i]);
+                            if (this->paintedValues[i] != 0) {  // not zero ----
                                 editVertsIndices.append(i);
                                 editVertsWeights.append(this->paintedValues[i]);
                                 this->paintedValues[i] = 0.0;
@@ -340,9 +341,18 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                         }
                         // post brushing apply values
                         // ----------------------------------------------------
-                        if (this->postSetting)
-                            applyCommand(dataBlock, editVertsIndices, editVertsWeights);
-                        else {  // store undo
+                        if (this->postSetting) {
+                            if (this->commandIndex < 6)
+                                applyCommand(dataBlock, editVertsIndices, editVertsWeights);
+                            else {  // deal with the locks ---------------------
+                                bool addLocks = this->commandIndex == 6;
+                                if (verbose)
+                                    MGlobal::displayInfo(
+                                        MString("applying locks adding is " + addLocks));
+                                editLocks(this->skinCluster_, editVertsIndices, addLocks,
+                                          this->lockVertices);
+                            }
+                        } else {  // store undo when not in post setting mode
                             MDoubleArray previousWeights;
 
                             previousWeights.setLength(editVertsIndices.length() * this->nbJoints);
@@ -366,9 +376,11 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                     }
                 } else if (this->refreshLockWeights) {  // get list of locks
                     if (verbose) MGlobal::displayInfo(MString("         --> refreshLockWeights"));
-                    MDataHandle callRefreshLocksData = dataBlock.inputValue(_getLockWeights);
-                    bool callRefreshLocksVal = callRefreshLocksData.asBool();
-
+                    bool callRefreshLocksVal = true;
+                    if (!this->init) {
+                        MDataHandle callRefreshLocksData = dataBlock.inputValue(_getLockWeights);
+                        bool callRefreshLocksVal = callRefreshLocksData.asBool();
+                    }
                     MIntArray prevLockVertices;
                     prevLockVertices.copy(this->lockVertices);
                     if (callRefreshLocksVal) {
@@ -383,6 +395,8 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                             editVertsIndices.append(i);
                     this->refreshLockWeights = false;
                     refreshColors(editVertsIndices, multiEditColors, soloEditColors);
+
+                    this->init = false;
                 } else if (this->inputVerticesChanged) {
                     if (verbose)
                         MGlobal::displayInfo(MString("         --> this->inputVerticesChanged ") +
@@ -461,30 +475,47 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                     unsigned int length = arrayData.length();
                     for (unsigned int i = 0; i < length; i++) {
                         double val = arrayData[i];
-                        if ((val > 0) &&
-                            (!this->lockVertices[i])) {  // superior zero and not locked
-                            if (val !=
-                                this->paintedValues[i]) {  // only if other zone painted ----------
-                                val = std::max(0.0, std::min(val, 1.0));  // clamp
-                                editVertsIndices.append(i);
-                                editVertsWeights.append(val);
-                                // MGlobal::displayInfo(MString(" paint value ") + i + MString(" -
-                                // ") + val);
-                                this->paintedValues[i] = val;  // store to not repaint
+                        if (val > 0.0) {
+                            if (this->commandIndex >= 6) {
+                                if (this->paintedValues[i] != 1) {  // painting locks
+                                    if (this->commandIndex == 6) {  // lock verts
+                                        multiEditColors.append(this->lockVertColor);
+                                        soloEditColors.append(this->lockVertColor);
+                                    } else {  // unlock verts
+                                        multiEditColors.append(this->multiCurrentColors[i]);
+                                        soloEditColors.append(this->soloCurrentColors[i]);
+                                    }
+                                    editVertsIndices.append(i);
+                                    editVertsWeights.append(1.0);
+                                    this->paintedValues[i] = 1;  // store to not repaint
+                                }
+                            } else if (!this->lockVertices[i]) {
+                                if (val !=
+                                    this->paintedValues[i]) {  // not already painted and not locked
+                                    // only if other zone painted ----------
+                                    val = std::max(0.0, std::min(val, 1.0));  // clamp
 
-                                val *= intensity;
-                                val = std::log10(val * 9 + 1);
-                                multiEditColors.append(val * multColor +
-                                                       (1.0 - val) * this->multiCurrentColors[i]);
-                                soloEditColors.append(val * soloMultColor +
-                                                      (1.0 - val) * this->soloCurrentColors[i]);
+                                    editVertsIndices.append(i);
+                                    editVertsWeights.append(val);
+                                    this->paintedValues[i] = val;  // store to not repaint
+                                    // MGlobal::displayInfo(MString(" paint value ") + i + MString("
+                                    // - ") + val);
+
+                                    val *= intensity;
+                                    val = std::log10(val * 9 + 1);
+                                    multiEditColors.append(val * multColor +
+                                                           (1.0 - val) *
+                                                               this->multiCurrentColors[i]);
+                                    soloEditColors.append(val * soloMultColor +
+                                                          (1.0 - val) * this->soloCurrentColors[i]);
+                                }
                             }
                         }
                     }
                     // during brushing apply values
                     // ---------------------------------------------------
                     if (!this->postSetting) {
-                        if (this->postSetting_timeToStoreUndo) {
+                        if (this->postSetting_timeToStoreUndo) {  // store undo
                             this->postSetting_timeToStoreUndo = false;
                             this->fullUndoSkinWeightList.copy(this->skinWeightList);
                         }
@@ -516,11 +547,11 @@ MStatus blurSkinDisplay::editSoloColorSet(MFnMesh& meshFn) {
         // Mesh_X_HeadBody_Pc_Sd1_SdDsp_.vtx[20266] -  ") + val + MString(" - storeValue ") +
         // this->soloColorsValues[theVert]);
         bool isVtxLocked = this->lockVertices[theVert] == 1;
-        if (!(this->soloColorsValues[theVert] == 0 && val == 0)) {
+        if (!(this->soloColorsValues[theVert] == 0 && val == 0)) {  // dont update the black
             MColor soloColor;
-            if (this->soloColorTypeVal == 0) {
+            if (this->soloColorTypeVal == 0) {  // black and white
                 soloColor = MColor(val, val, val);
-            } else if (this->soloColorTypeVal == 1) {
+            } else if (this->soloColorTypeVal == 1) {  // lava
                 val *= 2;
                 if (val > 1)
                     soloColor = MColor(val, (val - 1), 0);
@@ -529,11 +560,12 @@ MStatus blurSkinDisplay::editSoloColorSet(MFnMesh& meshFn) {
             } else {
                 soloColor = val * this->jointsColors[this->influenceIndex];
             }
-            if (isVtxLocked) soloColor = this->lockVertColor;
-
             this->soloCurrentColors[theVert] = soloColor;
             this->soloColorsValues[theVert] = val;
-            colToSet.append(soloColor);
+            if (isVtxLocked)
+                colToSet.append(this->lockVertColor);
+            else
+                colToSet.append(soloColor);
             vtxToSet.append(theVert);
         }
     }
@@ -547,7 +579,7 @@ MStatus blurSkinDisplay::applyCommand(MDataBlock& dataBlock, MIntArray& theEditV
     MStatus status;
     if (verbose) MGlobal::displayInfo(MString(" applyCommand ") + this->commandIndex);
 
-    if (this->commandIndex < 6) {
+    if (this->commandIndex < 6) {  // not lock or unlock verts
         MDoubleArray previousWeights(this->nbJoints * theEditVerts.length(), 0.0);
         // std::vector< double > previousWeights;
         // std::vector< int > undoVerts;
@@ -706,35 +738,35 @@ MStatus blurSkinDisplay::refreshColors(MIntArray& editVertsIndices, MColorArray&
         int theVert = editVertsIndices[i];
         MColor multiColor, soloColor;
         bool isVtxLocked = this->lockVertices[theVert] == 1;
-        if (!isVtxLocked) {
-            for (int j = 0; j < this->nbJoints; ++j) {  // for each joint
-                double val = this->skinWeightList[theVert * this->nbJoints + j];
-                ;
-                multiColor += jointsColors[j] * val;
-                if (j == this->influenceIndex) {
-                    this->soloColorsValues[i] = val;
+        for (int j = 0; j < this->nbJoints; ++j) {  // for each joint
+            double val = this->skinWeightList[theVert * this->nbJoints + j];
+            ;
+            multiColor += jointsColors[j] * val;
+            if (j == this->influenceIndex) {
+                this->soloColorsValues[i] = val;
 
-                    if (this->soloColorTypeVal == 0) {
-                        soloColor = MColor(val, val, val);
-                    } else if (this->soloColorTypeVal == 1) {
-                        val *= 2;
-                        if (val > 1)
-                            soloColor = MColor(val, (val - 1), 0);
-                        else
-                            soloColor = MColor(val, 0, 0);
-                    } else {
-                        soloColor = val * this->jointsColors[this->influenceIndex];
-                    }
+                if (this->soloColorTypeVal == 0) {
+                    soloColor = MColor(val, val, val);
+                } else if (this->soloColorTypeVal == 1) {
+                    val *= 2;
+                    if (val > 1)
+                        soloColor = MColor(val, (val - 1), 0);
+                    else
+                        soloColor = MColor(val, 0, 0);
+                } else {
+                    soloColor = val * this->jointsColors[this->influenceIndex];
                 }
             }
+        }
+        if (!isVtxLocked) {
+            multiEditColors[i] = multiColor;
+            soloEditColors[i] = soloColor;
         } else {
-            multiColor = this->lockVertColor;
-            soloColor = this->lockVertColor;
+            multiEditColors[i] = this->lockVertColor;
+            soloEditColors[i] = this->lockVertColor;
         }
         this->multiCurrentColors[theVert] = multiColor;
         this->soloCurrentColors[theVert] = soloColor;
-        multiEditColors[i] = multiColor;
-        soloEditColors[i] = soloColor;
     }
     return status;
 }
@@ -776,6 +808,7 @@ MStatus blurSkinDisplay::querySkinClusterValues(MIntArray& verticesIndices,
 
 MStatus blurSkinDisplay::fillArrayValues(bool doColors) {
     MStatus status = MS::kSuccess;
+    if (verbose) MGlobal::displayInfo(" FILLED ARRAY VALUES ");
 
     MFnDependencyNode skinClusterDep(skinCluster_);
 
@@ -805,7 +838,6 @@ MStatus blurSkinDisplay::fillArrayValues(bool doColors) {
         // MGlobal::displayInfo(plug_weights.name() + nb_weights);
 
         MColor theColor;
-        bool isVtxLocked = this->lockVertices[i] == 1;
         for (int j = 0; j < nb_weights; j++) {  // for each joint
             MPlug weight_plug = plug_weights.elementByPhysicalIndex(j);
             // weightList[i].weight[j]
@@ -814,17 +846,12 @@ MStatus blurSkinDisplay::fillArrayValues(bool doColors) {
 
             skin_weights_[i][j] = std::make_pair(indexInfluence, theWeight);
             this->skinWeightList[vertexIndex * this->nbJoints + indexInfluence] = theWeight;
-            if ((doColors) && (!isVtxLocked))  // and not locked
+            if (doColors)  // and not locked
                 theColor += this->jointsColors[indexInfluence] * theWeight;
         }
-        if (doColors)
-            if (isVtxLocked)
-                this->multiCurrentColors[vertexIndex] = this->lockVertColor;
-            else
-                this->multiCurrentColors[vertexIndex] = theColor;
+        if (doColors)  // not store lock vert color
+            this->multiCurrentColors[vertexIndex] = theColor;
     }
-    if (verbose) MGlobal::displayInfo(" FILLED ARRAY VALUES ");
-
     return status;
 }
 
@@ -939,6 +966,7 @@ MStatus blurSkinDisplay::initialize() {
 
     blurSkinDisplay::_postSetting =
         numAtt.create("postSetting", "ps", MFnNumericData::kBoolean, true, &status);
+    numAtt.setStorable(true);
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_postSetting);
 
     ///////////////////////////////////////////////////////////////////////////
@@ -960,18 +988,23 @@ MStatus blurSkinDisplay::initialize() {
 
     blurSkinDisplay::_clearArray =
         numAtt.create("clearArray", "ca", MFnNumericData::kBoolean, false, &status);
+    numAtt.setStorable(true);
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_clearArray);
 
     blurSkinDisplay::_callUndo =
         numAtt.create("callUndo", "cu", MFnNumericData::kBoolean, false, &status);
+    numAtt.setStorable(true);
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_callUndo);
 
     blurSkinDisplay::_getLockWeights =
         numAtt.create("getLockWeights", "glw", MFnNumericData::kBoolean, false, &status);
+    numAtt.setStorable(true);
+    numAtt.setStorable(true);
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_getLockWeights);
 
     blurSkinDisplay::_normalize =
         numAtt.create("normalize", "nom", MFnNumericData::kBoolean, true, &status);
+    numAtt.setStorable(true);
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_normalize);
 
     ///////////////////////////////////////////////////////////////////////////
@@ -987,6 +1020,7 @@ MStatus blurSkinDisplay::initialize() {
     CHECK_MSTATUS(enumAttr.addField("Smooth", 4));
     CHECK_MSTATUS(enumAttr.addField("Sharpen", 5));
     CHECK_MSTATUS(enumAttr.addField("Locks", 6));
+    CHECK_MSTATUS(enumAttr.addField("UnLocks", 7));
     // CHECK_MSTATUS(enumAttr.addField("UpdateSkin", 7));
     CHECK_MSTATUS(enumAttr.setStorable(true));
     CHECK_MSTATUS(enumAttr.setKeyable(true));
@@ -998,21 +1032,25 @@ MStatus blurSkinDisplay::initialize() {
 
     blurSkinDisplay::_autoExpandAttr =
         numAtt.create("autoExpand", "aex", MFnNumericData::kBoolean, false, &status);
+    numAtt.setStorable(true);
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_autoExpandAttr);
 
     blurSkinDisplay::_smoothRepeat =
         numAtt.create("smoothRepeat", "sr", MFnNumericData::kInt64, 3, &status);
     numAtt.setMin(1);
+    numAtt.setStorable(true);
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_smoothRepeat);
 
     blurSkinDisplay::_smoothDepth =
         numAtt.create("smoothDepth", "dpt", MFnNumericData::kInt64, 1, &status);
     numAtt.setMin(1);
+    numAtt.setStorable(true);
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_smoothDepth);
 
     blurSkinDisplay::_influenceAttr =
         numAtt.create("influenceIndex", "ii", MFnNumericData::kInt64, 0, &status);
     numAtt.setMin(0);
+    numAtt.setStorable(true);
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_influenceAttr);
 
     blurSkinDisplay::_colorType = enumAttr.create("colorType", "cty", 0);
@@ -1074,6 +1112,7 @@ MStatus blurSkinDisplay::initialize() {
 
     nAttr.setArray(true);
     nAttr.setUsesArrayDataBuilder(true);
+    nAttr.setStorable(true);
     addAttribute(_influenceColor);
 
     ///////////////////////////////////////////////////////////////////////////
