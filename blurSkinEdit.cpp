@@ -1081,6 +1081,7 @@ MStatus blurSkinDisplay::initialize() {
     // Initialize skin weights multi attributes
     ///////////////////////////////////////////////////////////////////////////
     _s_per_joint_weights = numAtt.create("weights", "w", MFnNumericData::kDouble, 0.0, &status);
+    // numAtt.setStorable(true);   // To be stored during file-save
     numAtt.setKeyable(false);
     numAtt.setArray(true);
     numAtt.setReadable(true);
@@ -1090,6 +1091,7 @@ MStatus blurSkinDisplay::initialize() {
 
     MFnCompoundAttribute cmpAttr;
     _s_skin_weights = cmpAttr.create("weightList", "wl", &status);
+    // numAtt.setStorable(true);   // To be stored during file-save
     cmpAttr.setArray(true);
     cmpAttr.addChild(_s_per_joint_weights);
     cmpAttr.setKeyable(false);
@@ -1097,8 +1099,6 @@ MStatus blurSkinDisplay::initialize() {
     cmpAttr.setWritable(false);
     cmpAttr.setUsesArrayDataBuilder(true);
     addAttribute(_s_skin_weights);
-
-    cmpAttr.setStorable(true);  // To be stored during file-save
 
     ///////////////////////////////////////////////////////////////////////////
     // theColors
@@ -1175,6 +1175,44 @@ MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
     }
     return (MS::kSuccess);
 }
+/*
+void blurSkinDisplay::beforeSave() {
+        MStatus status;
+        MPlug weight_list_plug(thisMObject(), blurSkinDisplay::_s_skin_weights);
+        MPlugArray plugs;
+        weight_list_plug.connectedTo(plugs, true, false, &status);
+        MGlobal::displayInfo(MString(" BEFORE SAVE disconnect"));
+        MDGModifier dg;
+
+        if (plugs.length() != 0) { // connected to a weightList
+                dg.disconnect(weight_list_plug, plugs[0]);
+                status = dg.doIt();
+        }
+
+        this->doConnectSkinCL = false;
+
+}
+
+MStatus blurSkinDisplay::shouldSave(const MPlug & plug, bool & ret)
+{
+        if (plug == _s_skin_weights)
+        {
+                ret = true;
+                return MS::kSuccess;
+        }
+        else if (plug == _s_per_joint_weights)
+        {
+                ret = true;
+                return MS::kSuccess;
+        }
+        return MPxNode::shouldSave(plug, ret);
+}
+
+bool blurSkinDisplay::doNotWrite() const
+{
+        return true;
+}
+*/
 
 /*
 MStatus blurSkinDisplay::postEvaluation(const MDGContext& context, const MEvaluationNode&

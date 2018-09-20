@@ -108,6 +108,9 @@ class blurSkinDisplay : public MPxNode {
     virtual MPlug passThroughToOne(const MPlug& plug) const;
     // MStatus postEvaluation(const MDGContext & 	context, const MEvaluationNode & 	evaluationNode,
     // PostEvaluationType 	evalType);
+    // MStatus				shouldSave(const MPlug & plug, bool & ret);
+    // virtual bool        doNotWrite() const;
+    // void				beforeSave();
     void set_skinning_weights(MDataBlock& block);
     void replace_weights(MDataBlock& block, MIntArray& theVertices, MDoubleArray& theWeights);
     static void* creator();
