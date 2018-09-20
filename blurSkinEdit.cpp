@@ -14,6 +14,8 @@ MObject blurSkinDisplay::_postSetting;
 MObject blurSkinDisplay::_commandAttr;
 MObject blurSkinDisplay::_colorType;
 MObject blurSkinDisplay::_soloColorType;
+MObject blurSkinDisplay::_minSoloColor;
+MObject blurSkinDisplay::_maxSoloColor;
 MObject blurSkinDisplay::_smoothRepeat;
 MObject blurSkinDisplay::_smoothDepth;
 MObject blurSkinDisplay::_influenceAttr;
@@ -40,16 +42,25 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
     MDataHandle getLockWeightsData = dataBlock.inputValue(_getLockWeights);
     MDataHandle getNormalizeData = dataBlock.inputValue(_normalize);
 
+    MDataHandle getMinSoloColorData = dataBlock.inputValue(_minSoloColor);
+    MDataHandle getMaxSoloColorData = dataBlock.inputValue(_maxSoloColor);
+    float prevMinColor = this->minSoloColor;
+    float prevMaxColor = this->maxSoloColor;
+    this->minSoloColor = getMinSoloColorData.asFloat();
+    this->maxSoloColor = getMaxSoloColorData.asFloat();
+
     MDataHandle colorTypeData = dataBlock.inputValue(_colorType);
     int prevColorCommand = this->colorCommand;
     this->colorCommand = colorTypeData.asShort();
-    if (verbose) MGlobal::displayInfo(MString(" GA| colorCommand   ") + this->colorCommand + " - ");
+    if (verbose)
+        MGlobal::displayInfo(MString(" GA| colorCommand   ") + this->colorCommand + MString(" - "));
 
     MDataHandle soloColorTypeData = dataBlock.inputValue(_soloColorType);
     int prevSoloColorType = this->soloColorTypeVal;
     this->soloColorTypeVal = soloColorTypeData.asShort();
     if (verbose)
-        MGlobal::displayInfo(MString(" GA| soloColorType  ") + this->soloColorTypeVal + " - ");
+        MGlobal::displayInfo(MString(" GA| soloColorType  ") + this->soloColorTypeVal +
+                             MString(" - "));
 
     int prevInfluenceIndex = this->influenceIndex;
     bool prevAutoExpand = this->autoExpand;
@@ -113,19 +124,29 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
             this->inputVerticesChanged = false;
         }
     }
-    if (verbose) MGlobal::displayInfo(MString(" GA| commandeIndex  ") + this->commandIndex + " - ");
     if (verbose)
-        MGlobal::displayInfo(MString(" GA| influenceIndex ") + this->influenceIndex + " - ");
-    if (verbose) MGlobal::displayInfo(MString(" GA| smoothRepeat   ") + this->smoothRepeat + " - ");
-    if (verbose) MGlobal::displayInfo(MString(" GA| smoothDepth    ") + this->smoothDepth + " - ");
+        MGlobal::displayInfo(MString(" GA| commandeIndex  ") + this->commandIndex + MString(" - "));
+    if (verbose)
+        MGlobal::displayInfo(MString(" GA| influenceIndex ") + this->influenceIndex +
+                             MString(" - "));
+    if (verbose)
+        MGlobal::displayInfo(MString(" GA| smoothRepeat   ") + this->smoothRepeat + MString(" - "));
+    if (verbose)
+        MGlobal::displayInfo(MString(" GA| smoothDepth    ") + this->smoothDepth + MString(" - "));
     if (verbose)
         MGlobal::displayInfo(MString(" GA| inputVerticesChanged  ") + this->inputVerticesChanged +
-                             " - ");
+                             MString(" - "));
 
-    if (this->colorCommand == 1)
+    if (this->colorCommand == 1) {
         this->reloadSoloColor = (prevSoloColorType != this->soloColorTypeVal) ||
                                 (prevColorCommand != this->colorCommand) ||
-                                (prevInfluenceIndex != this->influenceIndex);
+                                (prevInfluenceIndex != this->influenceIndex) ||
+                                (prevMinColor != this->minSoloColor) ||
+                                (prevMaxColor != this->maxSoloColor);
+    }
+    if ((prevMinColor != this->minSoloColor) || (prevMaxColor != this->maxSoloColor))
+        MGlobal::displayInfo(MString(" GA| changed  minColor ") + this->minSoloColor +
+                             MString(" - maxcolor ") + this->maxSoloColor);
     if (this->refreshLockWeights) this->applyPaint = true;
     /*
 
@@ -548,18 +569,7 @@ MStatus blurSkinDisplay::editSoloColorSet(MFnMesh& meshFn) {
         // this->soloColorsValues[theVert]);
         bool isVtxLocked = this->lockVertices[theVert] == 1;
         if (!(this->soloColorsValues[theVert] == 0 && val == 0)) {  // dont update the black
-            MColor soloColor;
-            if (this->soloColorTypeVal == 0) {  // black and white
-                soloColor = MColor(val, val, val);
-            } else if (this->soloColorTypeVal == 1) {  // lava
-                val *= 2;
-                if (val > 1)
-                    soloColor = MColor(val, (val - 1), 0);
-                else
-                    soloColor = MColor(val, 0, 0);
-            } else {
-                soloColor = val * this->jointsColors[this->influenceIndex];
-            }
+            MColor soloColor = getASoloColor(val);
             this->soloCurrentColors[theVert] = soloColor;
             this->soloColorsValues[theVert] = val;
             if (isVtxLocked)
@@ -724,6 +734,23 @@ void blurSkinDisplay::setInfluenceColorAttr() {
     this->changedColorInfluence = -1;
 }
 
+MColor blurSkinDisplay::getASoloColor(double val) {
+    if (val != 0) val = (this->maxSoloColor - this->minSoloColor) * val + this->minSoloColor;
+    MColor soloColor;
+    if (this->soloColorTypeVal == 0) {  // black and white
+        soloColor = MColor(val, val, val);
+    } else if (this->soloColorTypeVal == 1) {  // lava
+        val *= 2;
+        if (val > 1)
+            soloColor = MColor(val, (val - 1), 0);
+        else
+            soloColor = MColor(val, 0, 0);
+    } else {  // influence
+        soloColor = val * this->jointsColors[this->influenceIndex];
+    }
+    return soloColor;
+}
+
 MStatus blurSkinDisplay::refreshColors(MIntArray& editVertsIndices, MColorArray& multiEditColors,
                                        MColorArray& soloEditColors) {
     MStatus status = MS::kSuccess;
@@ -744,18 +771,7 @@ MStatus blurSkinDisplay::refreshColors(MIntArray& editVertsIndices, MColorArray&
             multiColor += jointsColors[j] * val;
             if (j == this->influenceIndex) {
                 this->soloColorsValues[i] = val;
-
-                if (this->soloColorTypeVal == 0) {
-                    soloColor = MColor(val, val, val);
-                } else if (this->soloColorTypeVal == 1) {
-                    val *= 2;
-                    if (val > 1)
-                        soloColor = MColor(val, (val - 1), 0);
-                    else
-                        soloColor = MColor(val, 0, 0);
-                } else {
-                    soloColor = val * this->jointsColors[this->influenceIndex];
-                }
+                soloColor = getASoloColor(val);
             }
         }
         if (!isVtxLocked) {
@@ -1077,6 +1093,16 @@ MStatus blurSkinDisplay::initialize() {
 
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_soloColorType);
 
+    blurSkinDisplay::_minSoloColor =
+        numAtt.create("minColor", "msc", MFnNumericData::kFloat, 0, &status);
+    numAtt.setStorable(true);
+    status = blurSkinDisplay::addAttribute(blurSkinDisplay::_minSoloColor);
+
+    blurSkinDisplay::_maxSoloColor =
+        numAtt.create("maxColor", "mxc", MFnNumericData::kFloat, 1.0, &status);
+    numAtt.setStorable(true);
+    status = blurSkinDisplay::addAttribute(blurSkinDisplay::_maxSoloColor);
+
     ///////////////////////////////////////////////////////////////////////////
     // Initialize skin weights multi attributes
     ///////////////////////////////////////////////////////////////////////////
@@ -1144,7 +1170,8 @@ MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
                           plugBeingDirtied == _smoothRepeat || plugBeingDirtied == _smoothDepth ||
                           plugBeingDirtied == _postSetting || plugBeingDirtied == _colorType ||
                           plugBeingDirtied == _cpList || plugBeingDirtied == _getLockWeights ||
-                          plugBeingDirtied == _soloColorType || plugBeingDirtied == _normalize ||
+                          plugBeingDirtied == _soloColorType || plugBeingDirtied == _minSoloColor ||
+                          plugBeingDirtied == _maxSoloColor || plugBeingDirtied == _normalize ||
                           plugBeingDirtied == _autoExpandAttr;
 
     this->clearTheArray = (plugBeingDirtied == _clearArray);

@@ -39,7 +39,8 @@ class blurSkinDisplay : public MPxNode {
     bool doConnectSkinCL = false;
     // void displayLayerWeights(const SkinLayer &layer);
     MObject skinCluster_;
-    MColorArray multiCurrentColors, jointsColors, soloCurrentColors;
+    MColorArray multiCurrentColors, jointsColors,
+        soloCurrentColors;  // lock vertices color are not stored inside these arrays
     MColor lockVertColor = MColor(0.2, 0.2, 0.2);
 
     MDoubleArray soloColorsValues;
@@ -65,6 +66,8 @@ class blurSkinDisplay : public MPxNode {
     bool callUndo = false;
     bool doNormalize = true;
     bool autoExpand = false;
+    float minSoloColor = 0.0;
+    float maxSoloColor = 1.0;
     int colorCommand = 0;      // multi
     int soloColorTypeVal = 1;  // 1 lava
     int nbAutoExpand = 3;      // autoExpand mode how many time we repeat it
@@ -98,6 +101,7 @@ class blurSkinDisplay : public MPxNode {
     MStatus refreshColors(MIntArray& editVertsIndices, MColorArray& multiEditColors,
                           MColorArray& soloEditColors);
     MStatus editSoloColorSet(MFnMesh& meshFn);
+    MColor getASoloColor(double val);
 
    public:
     blurSkinDisplay();
@@ -128,6 +132,8 @@ class blurSkinDisplay : public MPxNode {
     static MObject _commandAttr;
     static MObject _colorType;
     static MObject _soloColorType;
+    static MObject _minSoloColor;
+    static MObject _maxSoloColor;
     static MObject _smoothDepth;
     static MObject _smoothRepeat;
     static MObject _influenceColor;
