@@ -9,7 +9,9 @@ SET(SOURCE_FILES
 	"blurSkinEdit.cpp"
 	"blurSkinEdit.h"
     "functions.cpp"    
-    "functions.h"    
+    "functions.h"
+	"pointsDisplay.cpp"
+	"pointsDisplay.h"
 )
 
 FIND_PACKAGE(OpenGL REQUIRED)
