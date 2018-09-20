@@ -587,7 +587,7 @@ MStatus blurSkinDisplay::applyCommand(MDataBlock& dataBlock, MIntArray& theEditV
                                       MDoubleArray& verticesWeight, bool storeUndo) {
     // 0 Add - 1 Remove - 2 AddPercent - 3 Absolute - 4 Smooth - 5 Sharpen - 6 LockVertices
     MStatus status;
-    if (verbose) MGlobal::displayInfo(MString(" applyCommand ") + this->commandIndex);
+    if (verbose) MGlobal::displayInfo(MString(" applyCommand Index is ") + this->commandIndex);
 
     if (this->commandIndex < 6) {  // not lock or unlock verts
         MDoubleArray previousWeights(this->nbJoints * theEditVerts.length(), 0.0);
@@ -600,7 +600,7 @@ MStatus blurSkinDisplay::applyCommand(MDataBlock& dataBlock, MIntArray& theEditV
         int repeatLimit = 1;
         if (this->commandIndex == 4 || this->commandIndex == 5) repeatLimit = this->smoothRepeat;
         for (int repeat = 0; repeat < repeatLimit; ++repeat) {
-            if (this->commandIndex == 4) {
+            if (this->commandIndex == 4) {  // smooth
                 for (int i = 0; i < theEditVerts.length(); ++i) {
                     int theVert = theEditVerts[i];
                     double theVal = verticesWeight[i];
@@ -623,10 +623,11 @@ MStatus blurSkinDisplay::applyCommand(MDataBlock& dataBlock, MIntArray& theEditV
                     if (repeat == 0 && storeUndo)
                         previousWeights[i * this->nbJoints + j] =
                             this->skinWeightList[theVert * this->nbJoints + j];
+                    // this->skinWeightList[theVert*this->nbJoints + j] = verticesWeight[i] *
+                    // theWeights[i*this->nbJoints + j] + (1.0 - verticesWeight[i]) *
+                    // this->skinWeightList[theVert*this->nbJoints + j];
                     this->skinWeightList[theVert * this->nbJoints + j] =
-                        verticesWeight[i] * theWeights[i * this->nbJoints + j] +
-                        (1.0 - verticesWeight[i]) *
-                            this->skinWeightList[theVert * this->nbJoints + j];
+                        theWeights[i * this->nbJoints + j];
                 }
             }
         }
@@ -735,7 +736,9 @@ void blurSkinDisplay::setInfluenceColorAttr() {
 }
 
 MColor blurSkinDisplay::getASoloColor(double val) {
-    if (val != 0) val = (this->maxSoloColor - this->minSoloColor) * val + this->minSoloColor;
+    if (val == 0) return MColor(0, 0, 0);
+
+    val = (this->maxSoloColor - this->minSoloColor) * val + this->minSoloColor;
     MColor soloColor;
     if (this->soloColorTypeVal == 0) {  // black and white
         soloColor = MColor(val, val, val);
@@ -770,7 +773,9 @@ MStatus blurSkinDisplay::refreshColors(MIntArray& editVertsIndices, MColorArray&
             ;
             multiColor += jointsColors[j] * val;
             if (j == this->influenceIndex) {
-                this->soloColorsValues[i] = val;
+                this->soloColorsValues[theVert] = val;
+                if ((theVert == 22038) && verbose)
+                    MGlobal::displayInfo(MString(" vert  22038 ") + val);
                 soloColor = getASoloColor(val);
             }
         }
