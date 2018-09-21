@@ -48,13 +48,17 @@
 #include <maya/MFnComponentListData.h>
 #include <maya/MFnDoubleIndexedComponent.h>
 #include <maya/MFnEnumAttribute.h>
+#include <maya/MFnLattice.h>
+#include <maya/MFnMatrixData.h>
 #include <maya/MFnMesh.h>
 #include <maya/MFnMeshData.h>
 #include <maya/MFnNumericAttribute.h>
 #include <maya/MFnNurbsCurve.h>
 #include <maya/MFnNurbsSurface.h>
 #include <maya/MFnSingleIndexedComponent.h>
+#include <maya/MFnTripleIndexedComponent.h>
 #include <maya/MFnTypedAttribute.h>
+#include <maya/MMatrix.h>
 #include <maya/MPlugArray.h>
 
 // Viewport 2.0 includes

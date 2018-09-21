@@ -167,6 +167,17 @@ void PointsDisplayData::getData(const MObject& node) {
         MFnComponentListData compListFn(compList);
 
         MObject theNode = plugs[0].node();
+        /*
+        MFnDagNode fn(node);
+        MPlug matrixPlug = fn.findPlug("worldMatrix");
+        matrixPlug = matrixPlug.elementByLogicalIndex(0);
+
+        MObject matrixObject;
+        matrixObject = matrixPlug.asMObject();
+
+        MFnMatrixData worldMatrixData(matrixObject);
+        MMatrix worldMatrix = worldMatrixData.matrix();
+        */
         if (theNode.hasFn(MFn::kMesh)) {
             MFnMesh tmpMesh(theNode);
             // get data of points and bounding box ---------------------------------------
@@ -209,12 +220,11 @@ void PointsDisplayData::getData(const MObject& node) {
                 if (comp.apiType() == componentType) {
                     MFnSingleIndexedComponent siComp(comp);
                     for (int j = 0; j < siComp.elementCount(); j++)
-                        this->pointsVertices.append(pointsVerticesAll[siComp.element(j)]);
+                        this->pointsVertices.append(
+                            pointsVerticesAll[siComp.element(j)]);  // *worldMatrix);
                 }
             }
         } else if (theNode.hasFn(MFn::kNurbsSurface)) {
-            MPlug cpListPlug = MPlug(node, pointsDisplay::_cpList);
-            MObject compList = cpListPlug.asMObject();
             MFnNurbsSurface surfaceFn(theNode);
             this->theBoundingBox = surfaceFn.boundingBox(&status);
 
@@ -234,13 +244,11 @@ void PointsDisplayData::getData(const MObject& node) {
                         siComp.getElement(j, indexU, indexV);
                         int vertInd = numCVsInV * indexU + indexV;
 
-                        this->pointsVertices.append(cvPoints[vertInd]);
+                        this->pointsVertices.append(cvPoints[vertInd]);  // * worldMatrix);
                     }
                 }
             }
         } else if (theNode.hasFn(MFn::kNurbsCurve)) {
-            MPlug cpListPlug = MPlug(node, pointsDisplay::_cpList);
-            MObject compList = cpListPlug.asMObject();
             MFnNurbsCurve curveFn(theNode);
             this->theBoundingBox = curveFn.boundingBox(&status);
 
@@ -256,7 +264,28 @@ void PointsDisplayData::getData(const MObject& node) {
                 if (comp.apiType() == componentType) {
                     MFnSingleIndexedComponent siComp(comp);
                     for (int j = 0; j < siComp.elementCount(); j++)
-                        this->pointsVertices.append(cvPoints[siComp.element(j)]);
+                        this->pointsVertices.append(
+                            cvPoints[siComp.element(j)]);  // * worldMatrix);
+                }
+            }
+        } else if (theNode.hasFn(MFn::kLattice)) {  // lattice and everything else
+            MFnLattice latticeFn(theNode);
+            this->theBoundingBox = latticeFn.boundingBox(&status);
+
+            MFn::Type componentType = MFn::kLatticeComponent;
+            for (unsigned i = 0; i < compListFn.length(); i++) {
+                MObject comp = compListFn[i];
+                if (comp.apiType() == componentType) {
+                    MFnTripleIndexedComponent siComp(comp);
+                    for (int j = 0; j < siComp.elementCount(); j++) {
+                        int s, t, u;
+                        // MGlobal::displayInfo(MString(" indexU, indexV")+ indexU + MString(" ")+
+                        // indexV);
+                        siComp.getElement(j, s, t, u);
+
+                        MPoint thePt = latticeFn.point(s, t, u, &status);
+                        this->pointsVertices.append(thePt);  //* worldMatrix);
+                    }
                 }
             }
         }
