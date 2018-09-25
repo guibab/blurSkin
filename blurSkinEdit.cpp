@@ -149,7 +149,6 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
                              MString(" - maxcolor ") + this->maxSoloColor);
     if (this->refreshLockWeights) this->applyPaint = true;
     /*
-
     if (prevColorCommand != this->colorCommand) {
             MFnSkinCluster theSkinCluster(this->skinCluster_);
             MObjectArray objectsDeformed;
@@ -180,6 +179,13 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
 
         MDataHandle inMeshData = dataBlock.inputValue(blurSkinDisplay::_inMesh);
         MDataHandle outMeshData = dataBlock.outputValue(blurSkinDisplay::_outMesh);
+
+        MDataHandle clearArrayData = dataBlock.inputValue(_clearArray);
+        bool clearArrayVal = clearArrayData.asBool();
+        if (clearArrayVal) {
+            this->clearTheArray = true;
+            this->applyPaint = true;
+        }
 
         if (this->reloadCommand) {
             if (verbose) MGlobal::displayInfo(MString("   --> GA : this->reloadCommand "));
@@ -273,7 +279,6 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 this->reloadSoloColor = false;
                 dataBlock.setClean(plug);
                 return status;
-
                 // if (this->soloColorsValues .length() > 20266) MGlobal::displayInfo(MString(" post
                 // value     [20266] -  ") + this->soloColorsValues[20266]);
             } else if (this->applyPaint) {
@@ -283,17 +288,22 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 /////////////////////////////////////////////////////////////////
                 // consider painted attribute --------
                 /////////////////////////////////////////////////////////////////
-                MColor white(1, 1, 1), multColor, soloMultColor;
+                MColor white(1, 1, 1), multColor, soloMultColor, black(0, 0, 0);
                 float intensity = 1.0;
-                // 0 Add - 1 Remove - 2 AddPercent - 3 Absolute - 4 Smooth - 5 Sharpen - 6 Colors
-                if ((commandIndex < 4) && (influenceIndex > -1)) {
+                // 0 Add - 1 Remove - 2 AddPercent - 3 Absolute - 4 Smooth - 5 Sharpen - 6
+                // LockVertices - 7 UnLockVertices
+                if ((this->commandIndex < 4) && (this->influenceIndex > -1)) {
                     // multColor = .7*this->jointsColors[influenceIndex] + .3*white; // paint a
                     // little whiter
-                    multColor = this->jointsColors[influenceIndex];
-                    if (this->soloColorTypeVal == 2)
-                        soloMultColor = this->jointsColors[influenceIndex];
-                    else
-                        soloMultColor = white;
+                    multColor = this->jointsColors[this->influenceIndex];
+                    if (this->commandIndex == 1) {
+                        soloMultColor = black;
+                    } else {
+                        if (this->soloColorTypeVal == 2)
+                            soloMultColor = this->jointsColors[this->influenceIndex];
+                        else
+                            soloMultColor = white;
+                    }
                 } else {
                     multColor = white;
                     soloMultColor = white;
@@ -306,13 +316,9 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 if (this->clearTheArray) {
                     if (verbose) MGlobal::displayInfo("         --> this->clearTheArray");
                     this->clearTheArray = false;
-                    MDataHandle clearArrayData = dataBlock.inputValue(_clearArray);
-                    bool clearArrayVal = clearArrayData.asBool();
-                    if (verbose) {
-                        MString strVal = "False";
-                        if (clearArrayVal) strVal = "True";
-                        MGlobal::displayInfo("         --> clearArrayVal   " + strVal);
-                    }
+                    if (verbose)
+                        MGlobal::displayInfo(MString("         --> clearArrayVal   ") +
+                                             this->clearTheArray);
                     if (clearArrayVal) {
                         // MGlobal::displayInfo("------------  do clear array-----------------");
 
@@ -724,9 +730,12 @@ void blurSkinDisplay::connectSkinClusterWL() {
 void blurSkinDisplay::setInfluenceColorAttr() {
     MStatus status;
     MPlug influenceColor_Plug(thisMObject(), _influenceColor);
-
-    for (int i = 0; i < this->jointsColors.length(); ++i) {
-        MPlug thecolorPlug = influenceColor_Plug.elementByLogicalIndex(i, &status);
+    if (verbose) MGlobal::displayError(MString(" setInfluenceColorAttr "));
+    influenceColor_Plug.getExistingArrayAttributeIndices(this->deformersIndices);
+    // for (int i = 0; i < this->jointsColors.length(); ++i) {
+    for (int i = 0; this->deformersIndices.length(); ++i) {
+        int indexLogical = this->deformersIndices[i];
+        MPlug thecolorPlug = influenceColor_Plug.elementByLogicalIndex(indexLogical, &status);
         MColor theColor = this->jointsColors[i];
         thecolorPlug.child(0).setValue(theColor.r);
         thecolorPlug.child(1).setValue(theColor.g);
@@ -839,6 +848,13 @@ MStatus blurSkinDisplay::fillArrayValues(bool doColors) {
     int nbElements = weight_list_plug.numElements();
     this->nbJoints = matrix_plug.numElements();
 
+    matrix_plug.getExistingArrayAttributeIndices(this->deformersIndices);
+
+    this->nbJointsBig = this->deformersIndices[this->deformersIndices.length() -
+                                               1];  // matrix_plug.evaluateNumElements();
+    MGlobal::displayInfo(MString(" nb jnts ") + this->nbJoints + MString("  ") + this->nbJointsBig);
+    this->nbJoints = this->nbJointsBig;
+
     skin_weights_.resize(nbElements);
     if (doColors) {
         this->multiCurrentColors.clear();
@@ -856,6 +872,7 @@ MStatus blurSkinDisplay::fillArrayValues(bool doColors) {
         MPlug plug_weights = ith_weights_plug.child(0);  // access first compound child
         int nb_weights = plug_weights.numElements();
         skin_weights_[i].resize(nb_weights);
+        // skin_weights_[i].resize(nbJointPlugElements);
         // MGlobal::displayInfo(plug_weights.name() + nb_weights);
 
         MColor theColor;
@@ -877,6 +894,7 @@ MStatus blurSkinDisplay::fillArrayValues(bool doColors) {
 }
 
 void blurSkinDisplay::set_skinning_weights(MDataBlock& block) {
+    if (verbose) MGlobal::displayError(MString(" set_skinning_weights "));
     MStatus status = MS::kSuccess;
     MArrayDataHandle array_hdl = block.outputArrayValue(_s_skin_weights, &status);
     MArrayDataBuilder array_builder = array_hdl.builder(&status);
@@ -899,9 +917,9 @@ void blurSkinDisplay::set_skinning_weights(MDataBlock& block) {
             float val = myPair.second;
 
             MDataHandle hdl = weight_list_builder.addElement(index, &status);
-            // hdl.setDouble((double)val);
-            double theWeight = this->skinWeightList[i * nbJoints + index];
-            hdl.setDouble(theWeight);
+            hdl.setDouble((double)val);
+            // double theWeight = this->skinWeightList[i*nbJoints + index];
+            // hdl.setDouble(theWeight);
         }
         weight_list_hdl.set(weight_list_builder);
     }

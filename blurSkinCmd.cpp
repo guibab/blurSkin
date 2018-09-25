@@ -126,6 +126,7 @@ MSyntax blurSkinCmd::newSyntax() {
     // syntax.useSelectionAsDefault(true);
     return syntax;
 }
+
 blurSkinCmd::blurSkinCmd()
     : command_(kCommandSmooth),
       repeat_(1),

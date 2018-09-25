@@ -149,7 +149,6 @@ MStatus findOrigMesh(MObject& skinCluster, MObject& origMesh, bool verbose) {
 
 MStatus getListColorsJoints(MObject& skinCluster, MColorArray& jointsColors) {
     MStatus stat;
-
     /*
     MDagPathArray  listOfJoints;
     MFnSkinCluster theSkinCluster(skinCluster);
@@ -177,14 +176,18 @@ MStatus getListColorsJoints(MObject& skinCluster, MColorArray& jointsColors) {
 
     MFnDependencyNode skinClusterDep(skinCluster);
     MPlug influenceColor_plug = skinClusterDep.findPlug("influenceColor");
-    int nbJoints = influenceColor_plug.numElements();
+    int nbElements = influenceColor_plug.numElements();
     // MGlobal::displayInfo(influenceColor_plug.name() + " - " +nbJoints);
     jointsColors.clear();
+    MIntArray plugIndices;
+    influenceColor_plug.getExistingArrayAttributeIndices(plugIndices);
+    int nbJoints = plugIndices[plugIndices.length() - 1] + 1;
     jointsColors.setLength(nbJoints);
     float black[4] = {0, 0, 0, 1};
-    for (int i = 0; i < nbJoints; ++i) {
+    for (int i = 0; i < nbElements; ++i) {
         // weightList[i]
         MPlug colorPlug = influenceColor_plug.elementByPhysicalIndex(i);
+        int logicalInd = colorPlug.logicalIndex();
         if (colorPlug.isConnected()) {
             MPlugArray connections;
             colorPlug.connectedTo(connections, true, false);
@@ -192,16 +195,16 @@ MStatus getListColorsJoints(MObject& skinCluster, MColorArray& jointsColors) {
                 MPlug theConn = connections[0];
                 float element[4] = {theConn.child(0).asFloat(), theConn.child(1).asFloat(),
                                     theConn.child(2).asFloat(), 1};
-                jointsColors.set(element, i);
+                jointsColors.set(element, logicalInd);
             } else
-                jointsColors.set(black, i);
+                jointsColors.set(black, logicalInd);
         } else {
             // MGlobal::displayInfo(colorPlug.name());
             float element[4] = {colorPlug.child(0).asFloat(), colorPlug.child(1).asFloat(),
                                 colorPlug.child(2).asFloat(), 1};
             // MGlobal::displayInfo(colorPlug.name()+ " "+ element[0] + " " + element[1] + " " +
             // element[2]);
-            jointsColors.set(element, i);
+            jointsColors.set(element, logicalInd);
         }
     }
     return stat;
@@ -267,6 +270,7 @@ MStatus getListLockVertices(MObject& skinCluster, MIntArray& vertsLocks) {
     // ") + vertsLocks.length());
     return stat;
 }
+
 MStatus editLocks(MObject& skinCluster, MIntArray& inputVertsToLock, bool addToLock,
                   MIntArray& vertsLocks) {
     MStatus stat;
@@ -298,6 +302,7 @@ MStatus editLocks(MObject& skinCluster, MIntArray& inputVertsToLock, bool addToL
     stat = lockedVerticesPlug.setValue(tmpIntArray.create(theArrayValues));  // to set the attribute
     return stat;
 }
+
 MStatus getListColors(MObject& skinCluster, int nbVertices, MColorArray& currColors,
                       bool useMPlug) {
     MStatus stat;
@@ -385,7 +390,8 @@ MStatus editArray(int command, int influence, int nbJoints, MIntArray& lockJoint
                   MDoubleArray& fullWeightArray, MIntArray& vertices, MDoubleArray& verticesWeight,
                   MDoubleArray& theWeights, bool normalize) {
     MStatus stat;
-    // 0 Add - 1 Remove - 2 AddPercent - 3 Absolute - 4 Smooth - 5 Sharpen - 6 LockVertices
+    // 0 Add - 1 Remove - 2 AddPercent - 3 Absolute - 4 Smooth - 5 Sharpen - 6 LockVertices - 7
+    // UnLockVertices
     //
     if (command == 5) {  // sharpen  -----------------------
         for (int i = 0; i < vertices.length(); ++i) {

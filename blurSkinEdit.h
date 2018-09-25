@@ -41,6 +41,8 @@ class blurSkinDisplay : public MPxNode {
     MObject skinCluster_;
     MColorArray multiCurrentColors, jointsColors,
         soloCurrentColors;  // lock vertices color are not stored inside these arrays
+    MIntArray deformersIndices;
+    int nbJointsBig = 0;
     MColor lockVertColor = MColor(0.2, 0.2, 0.2);
 
     MDoubleArray soloColorsValues;
