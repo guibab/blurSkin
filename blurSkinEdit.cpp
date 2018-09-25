@@ -850,8 +850,8 @@ MStatus blurSkinDisplay::fillArrayValues(bool doColors) {
 
     matrix_plug.getExistingArrayAttributeIndices(this->deformersIndices);
 
-    this->nbJointsBig = this->deformersIndices[this->deformersIndices.length() -
-                                               1];  // matrix_plug.evaluateNumElements();
+    this->nbJointsBig = this->deformersIndices[this->deformersIndices.length() - 1] +
+                        1;  // matrix_plug.evaluateNumElements();
     MGlobal::displayInfo(MString(" nb jnts ") + this->nbJoints + MString("  ") + this->nbJointsBig);
     this->nbJoints = this->nbJointsBig;
 
