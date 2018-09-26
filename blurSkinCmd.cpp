@@ -242,16 +242,21 @@ MStatus blurSkinCmd::getAverageWeight(MIntArray vertices, int currentVertex) {
     int sizeVertices = vertices.length();
     int i, j, posi;
 
-    MDoubleArray sumWeigths;
-    for (j = 0; j < nbJoints; j++) sumWeigths.append(0.0);
-
-    // std::cout << " allWeigths NEW\t";
-    for (i = 0; i < sizeVertices; i++) {
-        // std::cout << "\nindexVTX: " <<vertices[i]<<" | ";
-        for (j = 0; j < nbJoints; j++) {
+    MDoubleArray sumWeigths(nbJoints, 0.0);
+    // compute sum weights
+    int currentWeightsLength = currentWeights.length();
+    for (i = 0; i < sizeVertices; ++i) {
+        for (j = 0; j < nbJoints; ++j) {
             posi = vertices[i] * nbJoints + j;
-            // std::cout << currentWeights[posi] <<" - ";
-            sumWeigths[j] += currentWeights[posi];
+            if (posi < currentWeightsLength)
+                sumWeigths[j] += currentWeights[posi];
+            else {
+                MGlobal::displayInfo(MString("currentWeights.length() ") + currentWeightsLength);
+                MGlobal::displayInfo(MString("currentVertex [") + currentVertex +
+                                     MString("] vertAround [") + vertices[i] +
+                                     MString("] nbJoints ") + nbJoints + MString(" posi ") + posi);
+                return MS::kFailure;
+            }
         }
     }
     double total = 0.0;
@@ -261,25 +266,20 @@ MStatus blurSkinCmd::getAverageWeight(MIntArray vertices, int currentVertex) {
         int posi = currentVertex * nbJoints + j;
         sumWeigths[j] /= sizeVertices;
 
-        if (!lockJoints[j]) {
-            total += sumWeigths[j];
-            totalBaseVtx += currentWeights[posi];
-            assign += 1;
-        }
+        total += sumWeigths[j];
+        totalBaseVtx += currentWeights[posi];
+        assign += 1;
     }
     if (total > 0. && totalBaseVtx > 0.) {
         double mult = totalBaseVtx / total;
-
         // std::cout << "\n total :\t" <<total ;
         // std::cout << "\n vtx :" << currentVertex << "\n";
         for (j = 0; j < nbJoints; j++) {
             int posiToSet = currentVertex * nbJoints + j;
-            if (!lockJoints[j]) {
-                sumWeigths[j] *= mult;  // normalement divide par 1, sauf cas lock joints
-                                        // std::cout << " " << sumWeigths[j];
-                newWeights.set(sumWeigths[j], posiToSet);
-                // newWeights[posiToSet]=sumWeigths[j];
-            }
+            sumWeigths[j] *= mult;  // normalement divide par 1, sauf cas lock joints
+            // std::cout << " " << sumWeigths[j];
+            newWeights.set(sumWeigths[j], posiToSet);
+            // newWeights[posiToSet]=sumWeigths[j];
         }
     }
     // print of result computation
@@ -615,7 +615,10 @@ MStatus blurSkinCmd::getAllWeights() {
         allVertices.addElements(ObjVertices);
         allVerticesObj = allVertices.create(MFn::kMeshVertComponent);
         unsigned int infCount;
-        theSkinCluster.getWeights(meshPath_, allVerticesObj, fullOrigWeights, infCount);
+        stat = theSkinCluster.getWeights(meshPath_, allVerticesObj, fullOrigWeights, infCount);
+        if (stat == MS::kFailure)
+            MGlobal::displayError(MString(" can not get the skin weights for mesh ") +
+                                  meshPath_.fullPathName());
     } else if (meshPath_.apiType() == MFn::kNurbsSurface) {  // if is nurbs
         /*
         MFnDoubleIndexedComponent allCVs;
@@ -897,6 +900,10 @@ MStatus blurSkinCmd::doIt(const MArgList& args) {
     if (useSelection) {
         getSoftSelection();  // dont get soft selection
         stat = findSkinCluster(meshPath_, skinCluster_, indSkinCluster_, verbose);
+        if (stat == MS::kFailure) {
+            MGlobal::displayError("cant find skin Cluster");
+            return MS::kFailure;
+        }
     } else {
         getTypeOfSurface();
         if (((isMeshSurface_) && (indicesVertices_.length() == 0)) ||
@@ -981,7 +988,6 @@ MStatus blurSkinCmd::executeAction() {
             }
             MGlobal::displayInfo(toDisplay);
         }
-
         //------- now do the setting ----------
         for (int i = 0; i < nbVertices; ++i) {
             index = indicesVertices_[i];
@@ -999,7 +1005,6 @@ MStatus blurSkinCmd::executeAction() {
         }
         // appendToResult(1.0);
         return MS::kSuccess;
-
     } else if (command_ == kCommandAverage) {
         MDoubleArray averageWeights;
         int index;
@@ -1057,6 +1062,11 @@ MStatus blurSkinCmd::executeAction() {
     } else if (isMeshSurface_) {  // component.apiType() == MFn::kMeshVertComponent) {
                                   // 3 cycle through all vertices
         MItMeshVertex itVertex(meshPath_, component, &stat);
+        if (stat == MS::kFailure) {
+            MGlobal::displayError(
+                MString(" MItMeshVertex itVertex(meshPath_, component, &stat); "));
+            return MS::kFailure;
+        }
         MIntArray vertices, repeatVertices, tmpVertices;
         MItMeshVertex itTempVertex(meshPath_);
         int prevIndex;
@@ -1094,9 +1104,13 @@ MStatus blurSkinCmd::executeAction() {
                         for (int vtx : setOfVerts) vertices.append(vtx);
                     }
                     stat = getAverageWeight(vertices, currentVertex);
+                    if (stat == MS::kFailure) {
+                        MGlobal::displayError(
+                            MString("something is failing, select and try again"));
+                        return MS::kFailure;
+                    }
                 } else
                     addWeights(currentVertex);
-
                 itVertex.next();
             }
             currentWeights.copy(newWeights);

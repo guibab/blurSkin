@@ -145,8 +145,9 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
                                 (prevMaxColor != this->maxSoloColor);
     }
     if ((prevMinColor != this->minSoloColor) || (prevMaxColor != this->maxSoloColor))
-        MGlobal::displayInfo(MString(" GA| changed  minColor ") + this->minSoloColor +
-                             MString(" - maxcolor ") + this->maxSoloColor);
+        if (verbose)
+            MGlobal::displayInfo(MString(" GA| changed  minColor ") + this->minSoloColor +
+                                 MString(" - maxcolor ") + this->maxSoloColor);
     if (this->refreshLockWeights) this->applyPaint = true;
     /*
     if (prevColorCommand != this->colorCommand) {
@@ -852,7 +853,9 @@ MStatus blurSkinDisplay::fillArrayValues(bool doColors) {
 
     this->nbJointsBig = this->deformersIndices[this->deformersIndices.length() - 1] +
                         1;  // matrix_plug.evaluateNumElements();
-    MGlobal::displayInfo(MString(" nb jnts ") + this->nbJoints + MString("  ") + this->nbJointsBig);
+    if (verbose)
+        MGlobal::displayInfo(MString(" nb jnts ") + this->nbJoints + MString("  ") +
+                             this->nbJointsBig);
     this->nbJoints = this->nbJointsBig;
 
     skin_weights_.resize(nbElements);

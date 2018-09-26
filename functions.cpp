@@ -474,10 +474,8 @@ MStatus setAverageWeight(MIntArray& verticesAround, int currentVertex, int index
     // MGlobal::displayInfo(MString(" paint smooth vtx [")+ currentVertex+ MString("] index - ") +
     // indexCurrVert + MString(" aroundCount ") + sizeVertices);
 
-    MDoubleArray sumWeigths;
-    for (j = 0; j < nbJoints; j++) sumWeigths.append(0.0);
-
-    // std::cout << " allWeigths NEW\t";
+    MDoubleArray sumWeigths(nbJoints, 0.0);
+    // compute sum weights
     for (i = 0; i < sizeVertices; i++) {
         for (j = 0; j < nbJoints; j++) {
             posi = verticesAround[i] * nbJoints + j;
@@ -486,28 +484,19 @@ MStatus setAverageWeight(MIntArray& verticesAround, int currentVertex, int index
     }
     double total = 0.0;
     double totalBaseVtx = 0.0;
-    int assign = 0;
     for (j = 0; j < nbJoints; j++) {
         int posi = currentVertex * nbJoints + j;
         sumWeigths[j] /= sizeVertices;
 
-        // if (!lockJoints[j]) {
         total += sumWeigths[j];
         totalBaseVtx += fullWeightArray[posi];
-        assign += 1;
-        //}
     }
     if (total > 0. && totalBaseVtx > 0.) {
         double mult = totalBaseVtx / total;
-        // std::cout << "\n vtx [" << currentVertex << "]" << " total " << total << "\n";
         for (j = 0; j < nbJoints; j++) {
             int posiToSet = indexCurrVert * nbJoints + j;
-            // if (!lockJoints[j]) {
-            sumWeigths[j] *= mult;  // normalement divide par 1, sauf cas lock joints
-                                    // std::cout << " " << sumWeigths[j];
-            // theWeights.set(sumWeigths[j], posiToSet );
+            sumWeigths[j] *= mult;  // normalement divide par 1
             theWeights[posiToSet] = sumWeigths[j];
-            //}
         }
     }
     return MS::kSuccess;
