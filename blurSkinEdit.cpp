@@ -406,9 +406,13 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                         // post brushing apply values
                         // ----------------------------------------------------
                         if (this->postSetting) {
-                            if (this->commandIndex < 6)
-                                applyCommand(dataBlock, editVertsIndices, editVertsWeights);
-                            else {  // deal with the locks ---------------------
+                            if (this->commandIndex < 6) {
+                                applyCommand(dataBlock, this->influenceIndex, editVertsIndices,
+                                             editVertsWeights);
+                                if (this->mirrorIsActive)
+                                    applyCommandMirror(dataBlock, editVertsIndices,
+                                                       editVertsWeights, false);
+                            } else {  // deal with the locks ---------------------
                                 bool addLocks = this->commandIndex == 6;
                                 if (verbose)
                                     MGlobal::displayInfo(
@@ -583,7 +587,11 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                             this->postSetting_timeToStoreUndo = false;
                             this->fullUndoSkinWeightList.copy(this->skinWeightList);
                         }
-                        applyCommand(dataBlock, editVertsIndices, editVertsWeights, false);
+                        applyCommand(dataBlock, this->influenceIndex, editVertsIndices,
+                                     editVertsWeights, false);
+                        if (this->mirrorIsActive)
+                            applyCommandMirror(dataBlock, editVertsIndices, editVertsWeights,
+                                               false);
                     }
                 }
                 meshFn.setSomeColors(editVertsIndices, multiEditColors, &this->fullColorSet);
@@ -596,6 +604,21 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
             //MGlobal::displayInfo(" _s_skin_weights CALL ");
     }*/
     dataBlock.setClean(plug);
+    return status;
+}
+MStatus blurSkinDisplay::applyCommandMirror(MDataBlock& dataBlock, MIntArray& theEditVerts,
+                                            MDoubleArray& verticesWeight, bool storeUndo) {
+    MStatus status;
+
+    MIntArray theMirrorVerts(theEditVerts.length());
+    for (int i = 0; i < theEditVerts.length(); ++i) {
+        int theVert = theEditVerts[i];
+        theMirrorVerts[i] = this->mirrorVertices[theVert];
+    }
+    int mirrorInfluenceIndex = this->mirrorInfluences[this->influenceIndex];
+    applyCommand(dataBlock, mirrorInfluenceIndex, theMirrorVerts, verticesWeight, storeUndo);
+
+    // refreshColors(theMirrorVerts, multiEditColors, soloEditColors);
     return status;
 }
 
@@ -626,12 +649,11 @@ MStatus blurSkinDisplay::editSoloColorSet(MFnMesh& meshFn) {
     return status;
 }
 
-MStatus blurSkinDisplay::applyCommand(MDataBlock& dataBlock, MIntArray& theEditVerts,
+MStatus blurSkinDisplay::applyCommand(MDataBlock& dataBlock, int influence, MIntArray& theEditVerts,
                                       MDoubleArray& verticesWeight, bool storeUndo) {
     // 0 Add - 1 Remove - 2 AddPercent - 3 Absolute - 4 Smooth - 5 Sharpen - 6 LockVertices
     MStatus status;
     if (verbose) MGlobal::displayInfo(MString(" applyCommand Index is ") + this->commandIndex);
-
     if (this->commandIndex < 6) {  // not lock or unlock verts
         MDoubleArray previousWeights(this->nbJoints * theEditVerts.length(), 0.0);
         // std::vector< double > previousWeights;
@@ -653,11 +675,11 @@ MStatus blurSkinDisplay::applyCommand(MDataBlock& dataBlock, MIntArray& theEditV
                                               this->lockJoints, this->skinWeightList, theWeights);
                 }
             } else {
-                if (this->lockJoints[influenceIndex] == 1 && this->commandIndex != 5)
+                if (this->lockJoints[influence] == 1 && this->commandIndex != 5)
                     return status;  //  if locked and it's not sharpen --> do nothing
-                status = editArray(this->commandIndex, influenceIndex, this->nbJoints,
-                                   this->lockJoints, this->skinWeightList, theEditVerts,
-                                   verticesWeight, theWeights, this->doNormalize);
+                status = editArray(this->commandIndex, influence, this->nbJoints, this->lockJoints,
+                                   this->skinWeightList, theEditVerts, verticesWeight, theWeights,
+                                   this->doNormalize);
             }
             // now set the weights -----------------------------------------------------
             for (int i = 0; i < theEditVerts.length(); ++i) {
