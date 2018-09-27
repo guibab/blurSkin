@@ -77,12 +77,13 @@ class blurSkinDisplay : public MPxNode {
     bool reloadSoloColor = false;
     bool inputVerticesChanged = false;
     int influenceIndex = 0, commandIndex = 0, smoothRepeat = 3, smoothDepth = 1;
-    int nbJoints = 0;
+    int nbJoints = 0, nbVertices = 0;
     MIntArray cpIds;  // the ids of the vertices passed as to update skin for
 
     // mirro things -----
     bool mirrorIsActive = false;
     MIntArray mirrorInfluences, mirrorVertices;
+    bool changeOfMirrorData = false;
 
     // void resizeVertexIndexes(const unsigned int newSize);
     std::vector<std::vector<std::pair<int, float>>> skin_weights_;
@@ -102,6 +103,7 @@ class blurSkinDisplay : public MPxNode {
     void connectSkinClusterWL();
     void setInfluenceColorAttr();
     MStatus getAttributes(MDataBlock& dataBlock);
+    MStatus blurSkinDisplay::getMirrorInfos(MDataBlock& dataBlock);
     MStatus applyCommand(MDataBlock& dataBlock, MIntArray& theEditVerts,
                          MDoubleArray& verticesWeight, bool storeUndo = true);
     MStatus refreshColors(MIntArray& editVertsIndices, MColorArray& multiEditColors,

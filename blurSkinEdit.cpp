@@ -44,7 +44,8 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
     MDataHandle getLockWeightsData = dataBlock.inputValue(_getLockWeights);
     MDataHandle getNormalizeData = dataBlock.inputValue(_normalize);
 
-    MDataHandle getMirrorActiveData = dataBlock.inputValue(_mirrorActive);
+    // MDataHandle getMirrorActiveData = dataBlock.inputValue(_mirrorActive);
+    // this->mirrorIsActive = getMirrorActiveData.asBool();
 
     MDataHandle getMinSoloColorData = dataBlock.inputValue(_minSoloColor);
     MDataHandle getMaxSoloColorData = dataBlock.inputValue(_maxSoloColor);
@@ -78,8 +79,6 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
 
     this->autoExpand = autoExpandData.asBool();
     int smoothDepthVal = smoothDepthData.asInt();
-
-    this->mirrorIsActive = getMirrorActiveData.asBool();
 
     if (smoothDepthVal != this->smoothDepth) {
         this->smoothDepth = smoothDepthVal;
@@ -176,7 +175,30 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
 
     return status;
 }
+MStatus blurSkinDisplay::getMirrorInfos(MDataBlock& dataBlock) {
+    if (verbose) MGlobal::displayInfo(MString("   --> getMirrorInfos "));
+    MStatus status;
+    MDataHandle getMirrorActiveData = dataBlock.inputValue(_mirrorActive);
+    this->mirrorIsActive = getMirrorActiveData.asBool();
+    if (this->mirrorIsActive) {
+        getSymetryAttributes(this->skinCluster_, this->mirrorVertices);
 
+        MObject dataObj = dataBlock.inputValue(_mirrorInfluenceArray).data();
+        MFnIntArrayData intData(dataObj);
+        this->mirrorInfluences = intData.array(&status);
+
+        MGlobal::displayInfo(MString(" symetry vertices ") + this->mirrorVertices.length() +
+                             MString(" symetry influences ") +
+                             this->mirrorInfluences.length());  // beginning opening of node
+        if ((this->mirrorVertices.length() != this->nbVertices) ||
+            (this->mirrorInfluences.length() != this->nbJoints)) {
+            this->mirrorIsActive = false;
+            MPlug mirrorActivePlug(thisMObject(), _mirrorActive);
+            mirrorActivePlug.setBool(false);
+        }
+    }
+    return status;
+}
 MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
     MStatus status;
 
@@ -196,7 +218,10 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
 
         if (this->reloadCommand) {
             if (verbose) MGlobal::displayInfo(MString("   --> GA : this->reloadCommand "));
-            getAttributes(dataBlock);
+            if (this->changeOfMirrorData)
+                getMirrorInfos(dataBlock);
+            else
+                getAttributes(dataBlock);
         }
         if (this->changedColorInfluence != -1) {  // user changed the color of the influence
             if (verbose) MGlobal::displayInfo(MString("   --> this->changedColorInfluence "));
@@ -236,18 +261,19 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
             // 1 get the colors
             MObject outMesh = outMeshData.asMesh();
             MFnMesh meshFn(outMesh);
-            int nbVertices = meshFn.numVertices();
+            int prevVertices = this->nbVertices;
+            this->nbVertices = meshFn.numVertices();
             if (this->init) {  // init of node /////////////////
                 if (verbose) MGlobal::displayInfo(MString("      --> INIT"));
-                this->fullVvertexList.setLength(nbVertices);
-                for (int i = 0; i < nbVertices; ++i) this->fullVvertexList[i] = i;
-                this->paintedValues = MDoubleArray(nbVertices, 0);
+                this->fullVvertexList.setLength(this->nbVertices);
+                for (int i = 0; i < this->nbVertices; ++i) this->fullVvertexList[i] = i;
+                this->paintedValues = MDoubleArray(this->nbVertices, 0);
                 if (verbose)
                     MGlobal::displayInfo(
                         MString("          set COLORS "));  // beginning opening of node
 
                 // get connected vertices --------------------
-                getConnectedVertices(outMesh, nbVertices);
+                getConnectedVertices(outMesh, this->nbVertices);
                 refreshVertsConnection();
 
                 // get face collor assignments ----------
@@ -261,20 +287,24 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 meshFn.assignColors(fullVvertexList, &this->fullColorSet);
                 // solo colors -----------------------
                 meshFn.createColorSetDataMesh(this->soloColorSet);
-                this->soloCurrentColors = MColorArray(nbVertices, MColor(0, 0, 0));
-                this->soloColorsValues = MDoubleArray(nbVertices, 0.0);
+                this->soloCurrentColors = MColorArray(this->nbVertices, MColor(0, 0, 0));
+                this->soloColorsValues = MDoubleArray(this->nbVertices, 0.0);
 
                 meshFn.setColors(this->soloCurrentColors, &this->soloColorSet);
                 meshFn.assignColors(fullVvertexList, &this->soloColorSet);
 
                 meshFn.createColorSetDataMesh(this->noColorSet);  // for no colors
                 // locks joints // all unlock
-                this->lockJoints = MIntArray(nbJoints, 0);
-                this->lockVertices = MIntArray(nbVertices, 0);
+                this->lockJoints = MIntArray(this->nbJoints, 0);
+                this->lockVertices = MIntArray(this->nbVertices, 0);
                 // now get and paint the locks ---------------
                 this->applyPaint = true;
                 this->refreshLockWeights = true;
                 // this->init = false; // init is set at false in the applyPaint refreshLockWeights
+            } else if (this->nbVertices != prevVertices) {
+                MGlobal::displayError(MString(" number of vertices has changed from " +
+                                              prevVertices + MString(" to ") + this->nbVertices));
+                return MS::kFailure;
             }
             if (this->reloadSoloColor) {
                 if (verbose) MGlobal::displayInfo(MString("      --> reloadSoloColor  "));
@@ -1210,12 +1240,15 @@ MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
     MStatus status;
     MObject thisNode = thisMObject();
     MFnDependencyNode fnThisNode(thisNode);
+    this->changeOfMirrorData =
+        plugBeingDirtied == _mirrorActive || plugBeingDirtied == _mirrorInfluenceArray;
+
     this->reloadCommand = plugBeingDirtied == _commandAttr || plugBeingDirtied == _influenceAttr ||
                           plugBeingDirtied == _smoothRepeat || plugBeingDirtied == _smoothDepth ||
                           plugBeingDirtied == _postSetting || plugBeingDirtied == _colorType ||
                           plugBeingDirtied == _cpList || plugBeingDirtied == _getLockWeights ||
                           plugBeingDirtied == _soloColorType || plugBeingDirtied == _minSoloColor ||
-                          plugBeingDirtied == _maxSoloColor || plugBeingDirtied == _mirrorActive ||
+                          plugBeingDirtied == _maxSoloColor || this->changeOfMirrorData ||
                           plugBeingDirtied == _normalize || plugBeingDirtied == _autoExpandAttr;
 
     this->clearTheArray = (plugBeingDirtied == _clearArray);
