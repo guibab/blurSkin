@@ -80,6 +80,10 @@ class blurSkinDisplay : public MPxNode {
     int nbJoints = 0;
     MIntArray cpIds;  // the ids of the vertices passed as to update skin for
 
+    // mirro things -----
+    bool mirrorIsActive = false;
+    MIntArray mirrorInfluences, mirrorVertices;
+
     // void resizeVertexIndexes(const unsigned int newSize);
     std::vector<std::vector<std::pair<int, float>>> skin_weights_;
     std::vector<MIntArray> undoVertsIndices_;
@@ -138,6 +142,8 @@ class blurSkinDisplay : public MPxNode {
     static MObject _maxSoloColor;
     static MObject _smoothDepth;
     static MObject _smoothRepeat;
+    static MObject _mirrorInfluenceArray;
+    static MObject _mirrorActive;
     static MObject _influenceColor;
     static MObject _influenceAttr;
     static MObject _autoExpandAttr;

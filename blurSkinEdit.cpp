@@ -18,6 +18,8 @@ MObject blurSkinDisplay::_minSoloColor;
 MObject blurSkinDisplay::_maxSoloColor;
 MObject blurSkinDisplay::_smoothRepeat;
 MObject blurSkinDisplay::_smoothDepth;
+MObject blurSkinDisplay::_mirrorInfluenceArray;
+MObject blurSkinDisplay::_mirrorActive;
 MObject blurSkinDisplay::_influenceAttr;
 MObject blurSkinDisplay::_influenceColor;
 MObject blurSkinDisplay::_getLockWeights;
@@ -41,6 +43,8 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
     MDataHandle autoExpandData = dataBlock.inputValue(_autoExpandAttr);
     MDataHandle getLockWeightsData = dataBlock.inputValue(_getLockWeights);
     MDataHandle getNormalizeData = dataBlock.inputValue(_normalize);
+
+    MDataHandle getMirrorActiveData = dataBlock.inputValue(_mirrorActive);
 
     MDataHandle getMinSoloColorData = dataBlock.inputValue(_minSoloColor);
     MDataHandle getMaxSoloColorData = dataBlock.inputValue(_maxSoloColor);
@@ -74,6 +78,8 @@ MStatus blurSkinDisplay::getAttributes(MDataBlock& dataBlock) {
 
     this->autoExpand = autoExpandData.asBool();
     int smoothDepthVal = smoothDepthData.asInt();
+
+    this->mirrorIsActive = getMirrorActiveData.asBool();
 
     if (smoothDepthVal != this->smoothDepth) {
         this->smoothDepth = smoothDepthVal;
@@ -1050,6 +1056,18 @@ MStatus blurSkinDisplay::initialize() {
     status = blurSkinDisplay::addAttribute(blurSkinDisplay::_normalize);
 
     ///////////////////////////////////////////////////////////////////////////
+    // mirror attributes
+    ///////////////////////////////////////////////////////////////////////////
+    blurSkinDisplay::_mirrorActive =
+        numAtt.create("mirrorActive", "ma", MFnNumericData::kBoolean, false, &status);
+    numAtt.setStorable(true);
+    status = blurSkinDisplay::addAttribute(blurSkinDisplay::_mirrorActive);
+
+    blurSkinDisplay::_mirrorInfluenceArray =
+        tAttr.create("mirrorInfluenceArray", "mia", MFnData::kIntArray, &status);
+    meshAttr.setStorable(true);
+    status = blurSkinDisplay::addAttribute(blurSkinDisplay::_mirrorInfluenceArray);
+    ///////////////////////////////////////////////////////////////////////////
     // creation attributes
     ///////////////////////////////////////////////////////////////////////////
     MFnEnumAttribute enumAttr, enumAttr2;
@@ -1197,8 +1215,8 @@ MStatus blurSkinDisplay::setDependentsDirty(const MPlug& plugBeingDirtied,
                           plugBeingDirtied == _postSetting || plugBeingDirtied == _colorType ||
                           plugBeingDirtied == _cpList || plugBeingDirtied == _getLockWeights ||
                           plugBeingDirtied == _soloColorType || plugBeingDirtied == _minSoloColor ||
-                          plugBeingDirtied == _maxSoloColor || plugBeingDirtied == _normalize ||
-                          plugBeingDirtied == _autoExpandAttr;
+                          plugBeingDirtied == _maxSoloColor || plugBeingDirtied == _mirrorActive ||
+                          plugBeingDirtied == _normalize || plugBeingDirtied == _autoExpandAttr;
 
     this->clearTheArray = (plugBeingDirtied == _clearArray);
     this->callUndo = (plugBeingDirtied == _callUndo);

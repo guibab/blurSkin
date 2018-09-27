@@ -42,6 +42,7 @@ MStatus getListColors(MObject& skinCluster, int nbVertices, MColorArray& currCol
 MStatus getListColorsJoints(MObject& skinCluster, MColorArray& jointsColors);
 MStatus getListLockJoints(MObject& skinCluster, MIntArray& jointsLocks);
 MStatus getListLockVertices(MObject& skinCluster, MIntArray& vertsLocks);
+MStatus getSymetryAttributes(MObject& skinCluster, MIntArray& symetryList);
 MStatus editLocks(MObject& skinCluster, MIntArray& vertsToLock, bool addToLock,
                   MIntArray& vertsLocks);
 MStatus editArray(int command, int influence, int nbJoints, MIntArray& lockJoints,

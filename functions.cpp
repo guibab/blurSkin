@@ -271,6 +271,30 @@ MStatus getListLockVertices(MObject& skinCluster, MIntArray& vertsLocks) {
     return stat;
 }
 
+MStatus getSymetryAttributes(MObject& skinCluster, MIntArray& symetryList) {
+    MStatus stat;
+
+    MFnSkinCluster theSkinCluster(skinCluster);
+    MObjectArray objectsDeformed;
+    theSkinCluster.getOutputGeometry(objectsDeformed);
+
+    MFnDagNode deformedNameMesh(objectsDeformed[0]);
+    MObject prt = deformedNameMesh.parent(0);
+
+    MFnDependencyNode prtDep(prt);
+    MPlug symVerticesPlug = prtDep.findPlug("symmetricVertices", &stat);
+    if (MS::kSuccess != stat) {
+        MGlobal::displayError(MString("cant find symmetricVertices plug"));
+        return stat;
+    }
+
+    MObject Data;
+    stat = symVerticesPlug.getValue(Data);  // to get the attribute
+
+    MFnIntArrayData intData(Data);
+    symetryList = intData.array(&stat);
+}
+
 MStatus editLocks(MObject& skinCluster, MIntArray& inputVertsToLock, bool addToLock,
                   MIntArray& vertsLocks) {
     MStatus stat;
