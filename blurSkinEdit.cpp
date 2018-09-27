@@ -347,7 +347,7 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                     intensity = float(0.1);
                 }
                 MColorArray multiEditColors, soloEditColors;
-                MIntArray editVertsIndices;
+                MIntArray editVertsIndices, theMirrorVerts, editAndMirrorVerts;
                 MDoubleArray editVertsWeights;
 
                 if (this->clearTheArray) {
@@ -403,15 +403,23 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                                 this->paintedValues[i] = 0.0;
                             }
                         }
+                        // store the mirror values
+                        if (this->mirrorIsActive) {
+                            getMirrorVertices(this->mirrorVertices, editVertsIndices,
+                                              theMirrorVerts, editAndMirrorVerts);
+                        }
                         // post brushing apply values
                         // ----------------------------------------------------
                         if (this->postSetting) {
-                            if (this->commandIndex < 6) {
-                                applyCommand(dataBlock, this->influenceIndex, editVertsIndices,
-                                             editVertsWeights);
+                            if (this->commandIndex < 6) {  // actual set weights values
                                 if (this->mirrorIsActive)
-                                    applyCommandMirror(dataBlock, editVertsIndices,
-                                                       editVertsWeights, false);
+                                    this->fullUndoSkinWeightList.copy(this->skinWeightList);
+                                applyCommand(dataBlock, this->influenceIndex, editVertsIndices,
+                                             editVertsWeights, !this->mirrorIsActive);
+                                if (this->mirrorIsActive) {
+                                    applyCommandMirror(dataBlock, theMirrorVerts, editVertsWeights);
+                                    doStoreUndo(editAndMirrorVerts);
+                                }
                             } else {  // deal with the locks ---------------------
                                 bool addLocks = this->commandIndex == 6;
                                 if (verbose)
@@ -421,23 +429,17 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                                           this->lockVertices);
                             }
                         } else {  // store undo when not in post setting mode
-                            MDoubleArray previousWeights;
-
-                            previousWeights.setLength(editVertsIndices.length() * this->nbJoints);
-                            for (int i = 0; i < editVertsIndices.length(); ++i) {
-                                int theVert = editVertsIndices[i];
-                                for (int j = 0; j < this->nbJoints; ++j)
-                                    previousWeights[i * this->nbJoints + j] =
-                                        this->fullUndoSkinWeightList[theVert * this->nbJoints + j];
-                            }
-                            this->undoVertsIndices_.push_back(editVertsIndices);
-                            this->undoVertsValues_.push_back(previousWeights);
-                            this->postSetting_timeToStoreUndo = true;
-                            this->fullUndoSkinWeightList.clear();
+                            if (this->mirrorIsActive)
+                                doStoreUndo(editAndMirrorVerts);
+                            else
+                                doStoreUndo(editVertsIndices);
                         }
                         // refresh the colors with real values
                         // -------------------------------------------
-                        refreshColors(editVertsIndices, multiEditColors, soloEditColors);
+                        if (this->mirrorIsActive)
+                            refreshColors(editAndMirrorVerts, multiEditColors, soloEditColors);
+                        else
+                            refreshColors(editVertsIndices, multiEditColors, soloEditColors);
 
                         MPlug clearArrayPlug(thisMObject(), _clearArray);
                         clearArrayPlug.setBool(false);
@@ -589,13 +591,21 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                         }
                         applyCommand(dataBlock, this->influenceIndex, editVertsIndices,
                                      editVertsWeights, false);
-                        if (this->mirrorIsActive)
-                            applyCommandMirror(dataBlock, editVertsIndices, editVertsWeights,
-                                               false);
+                        if (this->mirrorIsActive) {
+                            getMirrorVertices(this->mirrorVertices, editVertsIndices,
+                                              theMirrorVerts, editAndMirrorVerts);
+                            applyCommandMirror(dataBlock, theMirrorVerts, editVertsWeights);
+                        }
                     }
                 }
-                meshFn.setSomeColors(editVertsIndices, multiEditColors, &this->fullColorSet);
-                meshFn.setSomeColors(editVertsIndices, soloEditColors, &this->soloColorSet);
+                if (this->mirrorIsActive &&
+                    editVertsIndices.length() < editAndMirrorVerts.length()) {
+                    meshFn.setSomeColors(editAndMirrorVerts, multiEditColors, &this->fullColorSet);
+                    meshFn.setSomeColors(editAndMirrorVerts, soloEditColors, &this->soloColorSet);
+                } else {
+                    meshFn.setSomeColors(editVertsIndices, multiEditColors, &this->fullColorSet);
+                    meshFn.setSomeColors(editVertsIndices, soloEditColors, &this->soloColorSet);
+                }
             }
         }
     }
@@ -606,20 +616,29 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
     dataBlock.setClean(plug);
     return status;
 }
-MStatus blurSkinDisplay::applyCommandMirror(MDataBlock& dataBlock, MIntArray& theEditVerts,
-                                            MDoubleArray& verticesWeight, bool storeUndo) {
+
+MStatus blurSkinDisplay::doStoreUndo(MIntArray& undoArray) {
     MStatus status;
-
-    MIntArray theMirrorVerts(theEditVerts.length());
-    for (int i = 0; i < theEditVerts.length(); ++i) {
-        int theVert = theEditVerts[i];
-        theMirrorVerts[i] = this->mirrorVertices[theVert];
+    MDoubleArray previousWeights(undoArray.length() * this->nbJoints, 0.0);
+    for (int i = 0; i < undoArray.length(); ++i) {
+        int theVert = undoArray[i];
+        for (int j = 0; j < this->nbJoints; ++j)
+            previousWeights[i * this->nbJoints + j] =
+                this->fullUndoSkinWeightList[theVert * this->nbJoints + j];
     }
-    int mirrorInfluenceIndex = this->mirrorInfluences[this->influenceIndex];
-    applyCommand(dataBlock, mirrorInfluenceIndex, theMirrorVerts, verticesWeight, storeUndo);
-
-    // refreshColors(theMirrorVerts, multiEditColors, soloEditColors);
+    this->undoVertsIndices_.push_back(undoArray);
+    this->undoVertsValues_.push_back(previousWeights);
+    this->postSetting_timeToStoreUndo = true;
+    this->fullUndoSkinWeightList.clear();
     return status;
+}
+
+MStatus blurSkinDisplay::applyCommandMirror(MDataBlock& dataBlock, MIntArray& theMirrorVerts,
+                                            MDoubleArray& verticesWeight) {
+    MStatus status;
+    MGlobal::displayInfo(MString(" applyCommandMirror ") + theMirrorVerts.length());
+    int mirrorInfluenceIndex = this->mirrorInfluences[this->influenceIndex];
+    return applyCommand(dataBlock, mirrorInfluenceIndex, theMirrorVerts, verticesWeight, false);
 }
 
 MStatus blurSkinDisplay::editSoloColorSet(MFnMesh& meshFn) {
@@ -825,8 +844,9 @@ MColor blurSkinDisplay::getASoloColor(double val) {
 MStatus blurSkinDisplay::refreshColors(MIntArray& editVertsIndices, MColorArray& multiEditColors,
                                        MColorArray& soloEditColors) {
     MStatus status = MS::kSuccess;
-    if (verbose) MGlobal::displayInfo(MString(" refreshColors CALL "));  // beginning opening of
-                                                                         // node
+    if (verbose)
+        MGlobal::displayInfo(MString(" refreshColors CALL ") +
+                             editVertsIndices.length());  // beginning opening of node
     if (multiEditColors.length() != editVertsIndices.length())
         multiEditColors.setLength(editVertsIndices.length());
     if (soloEditColors.length() != editVertsIndices.length())

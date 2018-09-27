@@ -104,10 +104,11 @@ class blurSkinDisplay : public MPxNode {
     void setInfluenceColorAttr();
     MStatus getAttributes(MDataBlock& dataBlock);
     MStatus getMirrorInfos(MDataBlock& dataBlock);
+    MStatus doStoreUndo(MIntArray& undoArray);
     MStatus applyCommand(MDataBlock& dataBlock, int influence, MIntArray& theEditVerts,
                          MDoubleArray& verticesWeight, bool storeUndo = true);
-    MStatus applyCommandMirror(MDataBlock& dataBlock, MIntArray& theEditVerts,
-                               MDoubleArray& verticesWeight, bool storeUndo = true);
+    MStatus applyCommandMirror(MDataBlock& dataBlock, MIntArray& theMirrorVerts,
+                               MDoubleArray& verticesWeight);
     MStatus refreshColors(MIntArray& editVertsIndices, MColorArray& multiEditColors,
                           MColorArray& soloEditColors);
     MStatus editSoloColorSet(MFnMesh& meshFn);

@@ -295,6 +295,29 @@ MStatus getSymetryAttributes(MObject& skinCluster, MIntArray& symetryList) {
     symetryList = intData.array(&stat);
 }
 
+MStatus getMirrorVertices(MIntArray mirrorVertices, MIntArray& theEditVerts,
+                          MIntArray& theMirrorVerts, MIntArray& editAndMirrorVerts) {
+    MStatus status;
+
+    MIntArray vertExists(mirrorVertices.length(), 0);
+    editAndMirrorVerts.copy(theEditVerts);
+    for (int i = 0; i < theEditVerts.length(); ++i) vertExists[theEditVerts[i]] = 1;
+    for (int i = 0; i < theEditVerts.length(); ++i) {
+        int theVert = theEditVerts[i];
+        int theMirroredVert = mirrorVertices[theVert];
+        // theMirrorVerts[i] = theMirroredVert ;
+        if (vertExists[theMirroredVert] == 0) {  // not in first array
+            theMirrorVerts.append(theMirroredVert);
+            editAndMirrorVerts.append(theMirroredVert);
+        }
+    }
+    MGlobal::displayError(MString("theEditVerts ") + theEditVerts.length() +
+                          MString(" theMirrorVerts ") + theMirrorVerts.length() +
+                          MString(" editAndMirrorVerts ") + editAndMirrorVerts.length());
+
+    return status;
+}
+
 MStatus editLocks(MObject& skinCluster, MIntArray& inputVertsToLock, bool addToLock,
                   MIntArray& vertsLocks) {
     MStatus stat;
