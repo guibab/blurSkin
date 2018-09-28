@@ -187,11 +187,13 @@ MStatus blurSkinDisplay::getMirrorInfos(MDataBlock& dataBlock) {
         MFnIntArrayData intData(dataObj);
         this->mirrorInfluences = intData.array(&status);
 
-        MGlobal::displayInfo(MString(" symetry vertices ") + this->mirrorVertices.length() +
-                             MString(" symetry influences ") +
-                             this->mirrorInfluences.length());  // beginning opening of node
         if ((this->mirrorVertices.length() != this->nbVertices) ||
             (this->mirrorInfluences.length() != this->nbJoints)) {
+            MGlobal::displayInfo(MString(" symetry vertices ") + this->mirrorVertices.length() +
+                                 MString(" nb vertices ") + this->nbVertices);
+            MGlobal::displayInfo(MString(" symetry influences ") + this->mirrorInfluences.length() +
+                                 MString(" nb influences ") + this->nbJoints);
+
             this->mirrorIsActive = false;
             MPlug mirrorActivePlug(thisMObject(), _mirrorActive);
             mirrorActivePlug.setBool(false);
@@ -348,7 +350,7 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 }
                 MColorArray multiEditColors, soloEditColors;
                 MIntArray editVertsIndices, theMirrorVerts, editAndMirrorVerts;
-                MDoubleArray editVertsWeights, mirrorVertsWeights;
+                MDoubleArray editVertsWeights, mirrorVertsWeights, editAndMirrorWeights;
 
                 if (this->clearTheArray) {
                     if (verbose) MGlobal::displayInfo("         --> this->clearTheArray");
@@ -412,7 +414,7 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                                            (this->commandIndex == 4) || (this->commandIndex == 5);
                             getMirrorVertices(this->mirrorVertices, editVertsIndices,
                                               theMirrorVerts, editAndMirrorVerts, editVertsWeights,
-                                              mirrorVertsWeights, doMerge);
+                                              mirrorVertsWeights, editAndMirrorWeights, doMerge);
                         }
                         // post brushing apply values
                         // ----------------------------------------------------
@@ -580,18 +582,37 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
 
                                     val *= intensity;
                                     val = std::log10(val * 9 + 1);
-                                    multiEditColors.append(val * multColor +
-                                                           (1.0 - val) *
-                                                               this->multiCurrentColors[i]);
-                                    soloEditColors.append(val * soloMultColor +
-                                                          (1.0 - val) * this->soloCurrentColors[i]);
+                                    if (!this->mirrorIsActive) {  // we do the colors diferently if
+                                                                  // mirror is active
+                                        multiEditColors.append(val * multColor +
+                                                               (1.0 - val) *
+                                                                   this->multiCurrentColors[i]);
+                                        soloEditColors.append(val * soloMultColor +
+                                                              (1.0 - val) *
+                                                                  this->soloCurrentColors[i]);
+                                    }
                                 }
                             }
                         }
                     }
-                    // if (this->mirrorIsActive) getMirrorVertices(this->mirrorVertices,
-                    // editVertsIndices, theMirrorVerts, editAndMirrorVerts);
-
+                    if (this->mirrorIsActive) {
+                        int mirrorInfluenceIndex = this->mirrorInfluences[this->influenceIndex];
+                        bool doMerge = (this->influenceIndex == mirrorInfluenceIndex) ||
+                                       (this->commandIndex == 4) || (this->commandIndex == 5);
+                        doMerge = false;
+                        getMirrorVertices(this->mirrorVertices, editVertsIndices, theMirrorVerts,
+                                          editAndMirrorVerts, editVertsWeights, mirrorVertsWeights,
+                                          editAndMirrorWeights, doMerge);
+                        // edit more colors ie the sym colors
+                        for (int i = 0; i < editAndMirrorVerts.length(); ++i) {
+                            double val = editAndMirrorWeights[i];
+                            int vert = editAndMirrorVerts[i];
+                            multiEditColors.append(val * multColor +
+                                                   (1.0 - val) * this->multiCurrentColors[vert]);
+                            soloEditColors.append(val * soloMultColor +
+                                                  (1.0 - val) * this->soloCurrentColors[vert]);
+                        }
+                    }
                     // during brushing apply values
                     // ---------------------------------------------------
                     if (!this->postSetting) {
@@ -601,8 +622,8 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                         }
                         applyCommand(dataBlock, this->influenceIndex, editVertsIndices,
                                      editVertsWeights, false);
-                        // if (this->mirrorIsActive) applyCommandMirror(dataBlock, theMirrorVerts,
-                        // editVertsWeights);
+                        if (this->mirrorIsActive)
+                            applyCommandMirror(dataBlock, theMirrorVerts, editVertsWeights);
                     }
                 }
                 if (this->mirrorIsActive &&

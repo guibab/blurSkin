@@ -44,7 +44,7 @@ MStatus getSymetryAttributes(MObject& skinCluster, MIntArray& symetryList);
 MStatus getMirrorVertices(MIntArray mirrorVertices, MIntArray& theEditVerts,
                           MIntArray& theMirrorVerts, MIntArray& editAndMirrorVerts,
                           MDoubleArray& editVertsWeights, MDoubleArray& mirrorVertsWeights,
-                          bool doMerge = true);
+                          MDoubleArray& editAndMirrorWeights, bool doMerge = true);
 MStatus editLocks(MObject& skinCluster, MIntArray& vertsToLock, bool addToLock,
                   MIntArray& vertsLocks);
 MStatus editArray(int command, int influence, int nbJoints, MIntArray& lockJoints,

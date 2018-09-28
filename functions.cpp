@@ -298,13 +298,14 @@ MStatus getSymetryAttributes(MObject& skinCluster, MIntArray& symetryList) {
 MStatus getMirrorVertices(MIntArray mirrorVertices, MIntArray& theEditVerts,
                           MIntArray& theMirrorVerts, MIntArray& editAndMirrorVerts,
                           MDoubleArray& editVertsWeights, MDoubleArray& mirrorVertsWeights,
-                          bool doMerge) {
+                          MDoubleArray& editAndMirrorWeights, bool doMerge) {
     // doMerge do we merge the weights ? if painting the same influence or smooth
     MStatus status;
 
     MIntArray vertExists(mirrorVertices.length(), -1);
 
     editAndMirrorVerts.copy(theEditVerts);
+    editAndMirrorWeights.copy(editVertsWeights);
     if (!doMerge) {  // mirror verts same length and weights
         mirrorVertsWeights.copy(editVertsWeights);
         theMirrorVerts.setLength(theEditVerts.length());
@@ -324,12 +325,14 @@ MStatus getMirrorVertices(MIntArray mirrorVertices, MIntArray& theEditVerts,
                 mirrorVertsWeights.append(theWeight);
             }
             editAndMirrorVerts.append(theMirroredVert);
+            editAndMirrorWeights.append(theWeight);
         } else if (doMerge && theWeight < 1.0) {  // clip weight at 1
             double prevWeight = editVertsWeights[indVertExists];
             if (theWeight >
                 prevWeight) {  // add the remaining if existing weight is less than this new weight
                 theMirrorVerts.append(theMirroredVert);
                 mirrorVertsWeights.append(theWeight - prevWeight);
+                editAndMirrorWeights[indVertExists] = theWeight;  // edit weight
             }
         }
     }
