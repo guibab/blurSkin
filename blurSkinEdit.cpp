@@ -434,8 +434,12 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                                 if (verbose)
                                     MGlobal::displayInfo(
                                         MString("applying locks adding is " + addLocks));
-                                editLocks(this->skinCluster_, editVertsIndices, addLocks,
-                                          this->lockVertices);
+                                if (this->mirrorIsActive)
+                                    editLocks(this->skinCluster_, editAndMirrorVerts, addLocks,
+                                              this->lockVertices);
+                                else
+                                    editLocks(this->skinCluster_, editVertsIndices, addLocks,
+                                              this->lockVertices);
                             }
                         } else {  // store undo when not in post setting mode
                             if (this->mirrorIsActive)
@@ -557,13 +561,15 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                         if (val > 0.0) {
                             if (this->commandIndex >= 6) {
                                 if (this->paintedValues[i] != 1) {  // painting locks
-                                    if (this->commandIndex == 6) {  // lock verts
-                                        multiEditColors.append(this->lockVertColor);
-                                        soloEditColors.append(this->lockVertColor);
-                                    } else {  // unlock verts
-                                        multiEditColors.append(this->multiCurrentColors[i]);
-                                        soloEditColors.append(this->soloCurrentColors[i]);
-                                    }
+                                    if (!this->mirrorIsActive)  // we do the colors diferently if
+                                                                // mirror is active
+                                        if (this->commandIndex == 6) {  // lock verts
+                                            multiEditColors.append(this->lockVertColor);
+                                            soloEditColors.append(this->lockVertColor);
+                                        } else {  // unlock verts
+                                            multiEditColors.append(this->multiCurrentColors[i]);
+                                            soloEditColors.append(this->soloCurrentColors[i]);
+                                        }
                                     editVertsIndices.append(i);
                                     editVertsWeights.append(1.0);
                                     this->paintedValues[i] = 1;  // store to not repaint
@@ -607,10 +613,18 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                         for (int i = 0; i < editAndMirrorVerts.length(); ++i) {
                             double val = editAndMirrorWeights[i];
                             int vert = editAndMirrorVerts[i];
-                            multiEditColors.append(val * multColor +
-                                                   (1.0 - val) * this->multiCurrentColors[vert]);
-                            soloEditColors.append(val * soloMultColor +
-                                                  (1.0 - val) * this->soloCurrentColors[vert]);
+                            if (this->commandIndex == 6) {  // lock verts
+                                multiEditColors.append(this->lockVertColor);
+                                soloEditColors.append(this->lockVertColor);
+                            } else if (this->commandIndex == 7) {  // unlock verts
+                                multiEditColors.append(this->multiCurrentColors[vert]);
+                                soloEditColors.append(this->soloCurrentColors[vert]);
+                            } else {
+                                multiEditColors.append(
+                                    val * multColor + (1.0 - val) * this->multiCurrentColors[vert]);
+                                soloEditColors.append(val * soloMultColor +
+                                                      (1.0 - val) * this->soloCurrentColors[vert]);
+                            }
                         }
                     }
                     // during brushing apply values
