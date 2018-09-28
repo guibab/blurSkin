@@ -360,7 +360,6 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                                              this->clearTheArray);
                     if (clearArrayVal) {
                         // MGlobal::displayInfo("------------  do clear array-----------------");
-
                         if (this->autoExpand && this->postSetting) {  // not asking refresh of skin
                             if (verbose)
                                 MGlobal::displayInfo("            --> auto Expand on postSetting ");
@@ -434,12 +433,15 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                                 if (verbose)
                                     MGlobal::displayInfo(
                                         MString("applying locks adding is " + addLocks));
-                                if (this->mirrorIsActive)
+                                if (this->mirrorIsActive) {
                                     editLocks(this->skinCluster_, editAndMirrorVerts, addLocks,
                                               this->lockVertices);
-                                else
+                                    doStoreUndo(editAndMirrorVerts);
+                                } else {
                                     editLocks(this->skinCluster_, editVertsIndices, addLocks,
                                               this->lockVertices);
+                                    doStoreUndo(editVertsIndices);
+                                }
                             }
                         } else {  // store undo when not in post setting mode
                             if (this->mirrorIsActive)
@@ -503,14 +505,22 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                             MDoubleArray undoWeight_MArr = this->undoVertsValues_.back();
                             editVertsIndices.copy(this->undoVertsIndices_.back());
 
-                            for (int i = 0; i < editVertsIndices.length(); ++i) {
-                                int theVert = editVertsIndices[i];
-                                for (int j = 0; j < this->nbJoints; ++j) {
-                                    this->skinWeightList[theVert * this->nbJoints + j] =
-                                        undoWeight_MArr[i * this->nbJoints + j];
+                            bool lockWeights = undoWeight_MArr.length() == 1 &&
+                                               (undoWeight_MArr[0] == 6 || undoWeight_MArr[0] == 7);
+                            if (!lockWeights) {
+                                for (int i = 0; i < editVertsIndices.length(); ++i) {
+                                    int theVert = editVertsIndices[i];
+                                    for (int j = 0; j < this->nbJoints; ++j) {
+                                        this->skinWeightList[theVert * this->nbJoints + j] =
+                                            undoWeight_MArr[i * this->nbJoints + j];
+                                    }
                                 }
+                                replace_weights(dataBlock, editVertsIndices, undoWeight_MArr);
+                            } else {  // undo the locks
+                                bool addLocks = undoWeight_MArr[0] == 7;
+                                editLocks(this->skinCluster_, editVertsIndices, addLocks,
+                                          this->lockVertices);
                             }
-                            replace_weights(dataBlock, editVertsIndices, undoWeight_MArr);
 
                             this->undoVertsIndices_.pop_back();
                             this->undoVertsValues_.pop_back();
@@ -561,18 +571,25 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                         if (val > 0.0) {
                             if (this->commandIndex >= 6) {
                                 if (this->paintedValues[i] != 1) {  // painting locks
-                                    if (!this->mirrorIsActive)  // we do the colors diferently if
-                                                                // mirror is active
-                                        if (this->commandIndex == 6) {  // lock verts
-                                            multiEditColors.append(this->lockVertColor);
-                                            soloEditColors.append(this->lockVertColor);
-                                        } else {  // unlock verts
-                                            multiEditColors.append(this->multiCurrentColors[i]);
-                                            soloEditColors.append(this->soloCurrentColors[i]);
+                                    bool doStoreLock =
+                                        (this->commandIndex == 6 && !this->lockVertices[i]) ||
+                                        (this->commandIndex == 7 && this->lockVertices[i]);
+                                    if (doStoreLock) {
+                                        if (!this->mirrorIsActive) {  // we do the colors diferently
+                                                                      // if mirror is active
+                                            if (this->commandIndex ==
+                                                6) {  // lock verts if not already locked
+                                                multiEditColors.append(this->lockVertColor);
+                                                soloEditColors.append(this->lockVertColor);
+                                            } else {  // unlock verts
+                                                multiEditColors.append(this->multiCurrentColors[i]);
+                                                soloEditColors.append(this->soloCurrentColors[i]);
+                                            }
                                         }
-                                    editVertsIndices.append(i);
-                                    editVertsWeights.append(1.0);
-                                    this->paintedValues[i] = 1;  // store to not repaint
+                                        editVertsIndices.append(i);
+                                        editVertsWeights.append(1.0);
+                                        this->paintedValues[i] = 1;  // store to not repaint
+                                    }
                                 }
                             } else if (!this->lockVertices[i]) {
                                 if (val !=
@@ -661,15 +678,21 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
 
 MStatus blurSkinDisplay::doStoreUndo(MIntArray& undoArray) {
     MStatus status;
-    MDoubleArray previousWeights(undoArray.length() * this->nbJoints, 0.0);
-    for (int i = 0; i < undoArray.length(); ++i) {
-        int theVert = undoArray[i];
-        for (int j = 0; j < this->nbJoints; ++j)
-            previousWeights[i * this->nbJoints + j] =
-                this->fullUndoSkinWeightList[theVert * this->nbJoints + j];
+    if (this->commandIndex < 6) {
+        MDoubleArray previousWeights(undoArray.length() * this->nbJoints, 0.0);
+        for (int i = 0; i < undoArray.length(); ++i) {
+            int theVert = undoArray[i];
+            for (int j = 0; j < this->nbJoints; ++j)
+                previousWeights[i * this->nbJoints + j] =
+                    this->fullUndoSkinWeightList[theVert * this->nbJoints + j];
+        }
+        this->undoVertsValues_.push_back(previousWeights);
+    } else {
+        MDoubleArray previousWeights(1, this->commandIndex);
+        this->undoVertsValues_.push_back(previousWeights);
     }
     this->undoVertsIndices_.push_back(undoArray);
-    this->undoVertsValues_.push_back(previousWeights);
+
     this->postSetting_timeToStoreUndo = true;
     this->fullUndoSkinWeightList.clear();
     return status;

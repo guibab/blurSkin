@@ -62,10 +62,7 @@ class blurSkinDisplay : public MPxNode {
     bool clearTheArray = false;
     bool reloadCommand = true;
     bool postSetting = true;  // we apply paint as ssons as attr is changed
-    bool postSetting_timeToStoreUndo =
-        true;  // we store the undo for post setting after mouse release
     bool refreshLockWeights = false;
-    bool callUndo = false;
     bool doNormalize = true;
     bool autoExpand = false;
     float minSoloColor = 0.0;
@@ -80,6 +77,14 @@ class blurSkinDisplay : public MPxNode {
     int nbJoints = 0, nbVertices = 0;
     MIntArray cpIds;  // the ids of the vertices passed as to update skin for
 
+    // undo stuff -------
+    bool postSetting_timeToStoreUndo =
+        true;  // we store the undo for post setting after mouse release
+    bool callUndo = false;
+    std::vector<MIntArray> undoVertsIndices_;
+    std::vector<MDoubleArray> undoVertsValues_;
+    // undoVertsValues_ will comtains 6 if it awas lock or 7 if it was unlock
+
     // mirro things -----
     bool mirrorIsActive = false;
     MIntArray mirrorInfluences, mirrorVertices;
@@ -87,8 +92,6 @@ class blurSkinDisplay : public MPxNode {
 
     // void resizeVertexIndexes(const unsigned int newSize);
     std::vector<std::vector<std::pair<int, float>>> skin_weights_;
-    std::vector<MIntArray> undoVertsIndices_;
-    std::vector<MDoubleArray> undoVertsValues_;
     // std::vector< std::vector< int > > undoVertsIndices_;
     // std::vector< std::vector< double > > undoVertsValues_;
 
