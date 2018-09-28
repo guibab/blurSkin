@@ -348,7 +348,7 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                 }
                 MColorArray multiEditColors, soloEditColors;
                 MIntArray editVertsIndices, theMirrorVerts, editAndMirrorVerts;
-                MDoubleArray editVertsWeights;
+                MDoubleArray editVertsWeights, mirrorVertsWeights;
 
                 if (this->clearTheArray) {
                     if (verbose) MGlobal::displayInfo("         --> this->clearTheArray");
@@ -405,8 +405,14 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                         }
                         // store the mirror values
                         if (this->mirrorIsActive) {
+                            int mirrorInfluenceIndex = this->mirrorInfluences[this->influenceIndex];
+                            // 0 Add - 1 Remove - 2 AddPercent - 3 Absolute - 4 Smooth - 5 Sharpen -
+                            // 6 LockVertices - 7 UnLockVertices
+                            bool doMerge = (this->influenceIndex == mirrorInfluenceIndex) ||
+                                           (this->commandIndex == 4) || (this->commandIndex == 5);
                             getMirrorVertices(this->mirrorVertices, editVertsIndices,
-                                              theMirrorVerts, editAndMirrorVerts);
+                                              theMirrorVerts, editAndMirrorVerts, editVertsWeights,
+                                              mirrorVertsWeights, doMerge);
                         }
                         // post brushing apply values
                         // ----------------------------------------------------
@@ -417,7 +423,8 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                                 applyCommand(dataBlock, this->influenceIndex, editVertsIndices,
                                              editVertsWeights, !this->mirrorIsActive);
                                 if (this->mirrorIsActive) {
-                                    applyCommandMirror(dataBlock, theMirrorVerts, editVertsWeights);
+                                    applyCommandMirror(dataBlock, theMirrorVerts,
+                                                       mirrorVertsWeights);
                                     doStoreUndo(editAndMirrorVerts);
                                 }
                             } else {  // deal with the locks ---------------------
@@ -582,6 +589,9 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                             }
                         }
                     }
+                    // if (this->mirrorIsActive) getMirrorVertices(this->mirrorVertices,
+                    // editVertsIndices, theMirrorVerts, editAndMirrorVerts);
+
                     // during brushing apply values
                     // ---------------------------------------------------
                     if (!this->postSetting) {
@@ -591,11 +601,8 @@ MStatus blurSkinDisplay::compute(const MPlug& plug, MDataBlock& dataBlock) {
                         }
                         applyCommand(dataBlock, this->influenceIndex, editVertsIndices,
                                      editVertsWeights, false);
-                        if (this->mirrorIsActive) {
-                            getMirrorVertices(this->mirrorVertices, editVertsIndices,
-                                              theMirrorVerts, editAndMirrorVerts);
-                            applyCommandMirror(dataBlock, theMirrorVerts, editVertsWeights);
-                        }
+                        // if (this->mirrorIsActive) applyCommandMirror(dataBlock, theMirrorVerts,
+                        // editVertsWeights);
                     }
                 }
                 if (this->mirrorIsActive &&

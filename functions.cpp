@@ -296,22 +296,41 @@ MStatus getSymetryAttributes(MObject& skinCluster, MIntArray& symetryList) {
 }
 
 MStatus getMirrorVertices(MIntArray mirrorVertices, MIntArray& theEditVerts,
-                          MIntArray& theMirrorVerts, MIntArray& editAndMirrorVerts) {
+                          MIntArray& theMirrorVerts, MIntArray& editAndMirrorVerts,
+                          MDoubleArray& editVertsWeights, MDoubleArray& mirrorVertsWeights,
+                          bool doMerge) {
+    // doMerge do we merge the weights ? if painting the same influence or smooth
     MStatus status;
 
-    MIntArray vertExists(mirrorVertices.length(), 0);
-    editAndMirrorVerts.copy(theEditVerts);
+    MIntArray vertExists(mirrorVertices.length(), -1);
 
-    theMirrorVerts.setLength(theEditVerts.length());  // to change
-    for (int i = 0; i < theEditVerts.length(); ++i) vertExists[theEditVerts[i]] = 1;
+    editAndMirrorVerts.copy(theEditVerts);
+    if (!doMerge) {  // mirror verts same length and weights
+        mirrorVertsWeights.copy(editVertsWeights);
+        theMirrorVerts.setLength(theEditVerts.length());
+    }
+
+    for (int i = 0; i < theEditVerts.length(); ++i) vertExists[theEditVerts[i]] = i;
     for (int i = 0; i < theEditVerts.length(); ++i) {
         int theVert = theEditVerts[i];
         int theMirroredVert = mirrorVertices[theVert];
 
-        theMirrorVerts[i] = theMirroredVert;     // to change
-        if (vertExists[theMirroredVert] == 0) {  // not in first array
-            // theMirrorVerts.append(theMirroredVert);
+        if (!doMerge) theMirrorVerts[i] = theMirroredVert;  // to
+        double theWeight = editVertsWeights[i];
+        int indVertExists = vertExists[theMirroredVert];
+        if (indVertExists == -1) {  // not in first array
+            if (doMerge) {
+                theMirrorVerts.append(theMirroredVert);
+                mirrorVertsWeights.append(theWeight);
+            }
             editAndMirrorVerts.append(theMirroredVert);
+        } else if (doMerge && theWeight < 1.0) {  // clip weight at 1
+            double prevWeight = editVertsWeights[indVertExists];
+            if (theWeight >
+                prevWeight) {  // add the remaining if existing weight is less than this new weight
+                theMirrorVerts.append(theMirroredVert);
+                mirrorVertsWeights.append(theWeight - prevWeight);
+            }
         }
     }
     // MGlobal::displayError(MString("theEditVerts ") + theEditVerts.length() + MString("
