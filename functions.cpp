@@ -301,19 +301,22 @@ MStatus getMirrorVertices(MIntArray mirrorVertices, MIntArray& theEditVerts,
 
     MIntArray vertExists(mirrorVertices.length(), 0);
     editAndMirrorVerts.copy(theEditVerts);
+
+    theMirrorVerts.setLength(theEditVerts.length());  // to change
     for (int i = 0; i < theEditVerts.length(); ++i) vertExists[theEditVerts[i]] = 1;
     for (int i = 0; i < theEditVerts.length(); ++i) {
         int theVert = theEditVerts[i];
         int theMirroredVert = mirrorVertices[theVert];
-        // theMirrorVerts[i] = theMirroredVert ;
+
+        theMirrorVerts[i] = theMirroredVert;     // to change
         if (vertExists[theMirroredVert] == 0) {  // not in first array
-            theMirrorVerts.append(theMirroredVert);
+            // theMirrorVerts.append(theMirroredVert);
             editAndMirrorVerts.append(theMirroredVert);
         }
     }
-    MGlobal::displayError(MString("theEditVerts ") + theEditVerts.length() +
-                          MString(" theMirrorVerts ") + theMirrorVerts.length() +
-                          MString(" editAndMirrorVerts ") + editAndMirrorVerts.length());
+    // MGlobal::displayError(MString("theEditVerts ") + theEditVerts.length() + MString("
+    // theMirrorVerts ") + theMirrorVerts.length() + MString(" editAndMirrorVerts ") +
+    // editAndMirrorVerts.length() );
 
     return status;
 }

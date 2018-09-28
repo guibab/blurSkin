@@ -636,7 +636,7 @@ MStatus blurSkinDisplay::doStoreUndo(MIntArray& undoArray) {
 MStatus blurSkinDisplay::applyCommandMirror(MDataBlock& dataBlock, MIntArray& theMirrorVerts,
                                             MDoubleArray& verticesWeight) {
     MStatus status;
-    MGlobal::displayInfo(MString(" applyCommandMirror ") + theMirrorVerts.length());
+    if (verbose) MGlobal::displayInfo(MString(" applyCommandMirror ") + theMirrorVerts.length());
     int mirrorInfluenceIndex = this->mirrorInfluences[this->influenceIndex];
     return applyCommand(dataBlock, mirrorInfluenceIndex, theMirrorVerts, verticesWeight, false);
 }
