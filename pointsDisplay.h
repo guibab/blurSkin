@@ -45,6 +45,7 @@
 #include <maya/MVector.h>
 
 // added by me
+#include <maya/MDagPath.h>
 #include <maya/MFnComponentListData.h>
 #include <maya/MFnDoubleIndexedComponent.h>
 #include <maya/MFnEnumAttribute.h>

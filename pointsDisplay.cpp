@@ -167,8 +167,9 @@ void PointsDisplayData::getData(const MObject& node) {
         MFnComponentListData compListFn(compList);
 
         MObject theNode = plugs[0].node();
+
         /*
-        MFnDagNode fn(node);
+        MFnDagNode fn(theNode);
         MPlug matrixPlug = fn.findPlug("worldMatrix");
         matrixPlug = matrixPlug.elementByLogicalIndex(0);
 
@@ -178,6 +179,18 @@ void PointsDisplayData::getData(const MObject& node) {
         MFnMatrixData worldMatrixData(matrixObject);
         MMatrix worldMatrix = worldMatrixData.matrix();
         */
+
+        // get the transform  matrix
+        MFnDagNode theShape(theNode);
+        MObject prt = theShape.parent(0);
+
+        MDagPath pth;
+        status = MDagPath::getAPathTo(theNode, pth);
+        MMatrix worldMatrix = pth.inclusiveMatrix();
+        // MGlobal::displayInfo(MString("   --> NAME : ")+ pth.fullPathName());
+
+        // MMatrix worldMatrix;
+
         if (theNode.hasFn(MFn::kMesh)) {
             MFnMesh tmpMesh(theNode);
             // get data of points and bounding box ---------------------------------------
@@ -220,8 +233,8 @@ void PointsDisplayData::getData(const MObject& node) {
                 if (comp.apiType() == componentType) {
                     MFnSingleIndexedComponent siComp(comp);
                     for (int j = 0; j < siComp.elementCount(); j++)
-                        this->pointsVertices.append(
-                            pointsVerticesAll[siComp.element(j)]);  // *worldMatrix);
+                        this->pointsVertices.append(pointsVerticesAll[siComp.element(j)] *
+                                                    worldMatrix);  //);
                 }
             }
         } else if (theNode.hasFn(MFn::kNurbsSurface)) {
@@ -244,7 +257,7 @@ void PointsDisplayData::getData(const MObject& node) {
                         siComp.getElement(j, indexU, indexV);
                         int vertInd = numCVsInV * indexU + indexV;
 
-                        this->pointsVertices.append(cvPoints[vertInd]);  // * worldMatrix);
+                        this->pointsVertices.append(cvPoints[vertInd] * worldMatrix);
                     }
                 }
             }
@@ -264,8 +277,7 @@ void PointsDisplayData::getData(const MObject& node) {
                 if (comp.apiType() == componentType) {
                     MFnSingleIndexedComponent siComp(comp);
                     for (int j = 0; j < siComp.elementCount(); j++)
-                        this->pointsVertices.append(
-                            cvPoints[siComp.element(j)]);  // * worldMatrix);
+                        this->pointsVertices.append(cvPoints[siComp.element(j)] * worldMatrix);
                 }
             }
         } else if (theNode.hasFn(MFn::kLattice)) {  // lattice and everything else
@@ -284,7 +296,7 @@ void PointsDisplayData::getData(const MObject& node) {
                         siComp.getElement(j, s, t, u);
 
                         MPoint thePt = latticeFn.point(s, t, u, &status);
-                        this->pointsVertices.append(thePt);  //* worldMatrix);
+                        this->pointsVertices.append(thePt * worldMatrix);
                     }
                 }
             }
@@ -473,12 +485,12 @@ MStatus pointsDisplay::initialize() {
     CHECK_MSTATUS(addAttribute(_inMesh));
     */
     _inGeometry = inMeshAttrFn.create("inGeometry", "inGeo", MFnGeometryData::kAny);
-    CHECK_MSTATUS(inMeshAttrFn.setStorable(true));
-    CHECK_MSTATUS(inMeshAttrFn.setKeyable(false));
-    CHECK_MSTATUS(inMeshAttrFn.setReadable(true));
-    CHECK_MSTATUS(inMeshAttrFn.setWritable(true));
-    CHECK_MSTATUS(inMeshAttrFn.setCached(false));
-    CHECK_MSTATUS(addAttribute(_inGeometry));
+    inMeshAttrFn.setStorable(true);
+    inMeshAttrFn.setKeyable(false);
+    inMeshAttrFn.setReadable(true);
+    inMeshAttrFn.setWritable(true);
+    inMeshAttrFn.setCached(false);
+    addAttribute(_inGeometry);
 
     _inputColor = nAttr.createColor("inputColor", "ico");
     nAttr.setDefault(1.0, 1.0, 0.0);
