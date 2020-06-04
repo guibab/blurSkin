@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.6)
 project(blurSkin)
 
-SET(MAYA_VERSION 2017 CACHE STRING "Maya version number")
+SET(MAYA_VERSION 2019 CACHE STRING "Maya version number")
 SET(SOURCE_FILES 
     "blurSkinPlugin.cpp" 
     "blurSkinCmd.cpp" 

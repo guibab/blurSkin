@@ -73,6 +73,7 @@ class blurSkinDisplay : public MPxNode {
     int changedColorInfluence = -1;
     bool reloadSoloColor = false;
     bool inputVerticesChanged = false;
+
     int influenceIndex = 0, commandIndex = 0, smoothRepeat = 3, smoothDepth = 1;
     int nbJoints = 0, nbVertices = 0;
     MIntArray cpIds;  // the ids of the vertices passed as to update skin for

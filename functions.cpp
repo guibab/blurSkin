@@ -573,3 +573,34 @@ MStatus setAverageWeight(MIntArray& verticesAround, int currentVertex, int index
     }
     return MS::kSuccess;
 }
+
+MStatus doPruneWeight(MDoubleArray& theWeights, int nbJoints, double pruneCutWeight) {
+    MStatus stat;
+
+    int vertIndex, jnt, posiInArray;
+    int nbElements = theWeights.length();
+    int nbVertices = nbElements / nbJoints;
+    double total = 0.0, val;
+
+    // MDoubleArray WeightsCopy (theWeights);
+    for (vertIndex = 0; vertIndex < nbVertices; ++vertIndex) {
+        total = 0.0;
+        for (jnt = 0; jnt < nbJoints; jnt++) {
+            posiInArray = vertIndex * nbJoints + jnt;
+            val = theWeights[posiInArray];
+            if (val > pruneCutWeight) {
+                total += val;
+            } else {
+                theWeights[posiInArray] = 0.0;
+            }
+        }
+        // now normalize
+        if (total != 1.0) {
+            for (jnt = 0; jnt < nbJoints; jnt++) {
+                posiInArray = vertIndex * nbJoints + jnt;
+                theWeights[posiInArray] /= total;  // that should normalize
+            }
+        }
+    }
+    return MS::kSuccess;
+};

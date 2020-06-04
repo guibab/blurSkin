@@ -45,6 +45,9 @@ const char* blurSkinCmd::kDepthFlagLong = "-depth";
 const char* blurSkinCmd::kRespectLocksFlagShort = "-rl";
 const char* blurSkinCmd::kRespectLocksFlagLong = "-respectLocks";
 
+const char* blurSkinCmd::kThresholdFlagShort = "-th";
+const char* blurSkinCmd::kThresholdFlagLong = "-threshold";
+
 const char* blurSkinCmd::kZeroInfluencesFlagShort = "-zi";
 const char* blurSkinCmd::kZeroInfluencesFlagLong = "-zeroInfluences";
 
@@ -84,7 +87,8 @@ void DisplayHelp() {
     help += "-command             -c     N/A        the command action correct inputs are :\n";
     help +=
         "                                        smooth - add - absolute - percentage - average - "
-        "colors\n";
+        "colors - prune\n";
+    help += "-threshold			  -th   Double      threshold for the prune weights\n";
     help += "-help                -h     N/A        Display this text.\n";
     MGlobal::displayInfo(help);
 }
@@ -117,6 +121,7 @@ MSyntax blurSkinCmd::newSyntax() {
     syntax.addFlag(kRepeatFlagShort, kRepeatFlagLong, MSyntax::kLong);
     syntax.addFlag(kDepthFlagShort, kDepthFlagLong, MSyntax::kLong);
     syntax.addFlag(kRespectLocksFlagShort, kRespectLocksFlagLong);
+    syntax.addFlag(kThresholdFlagShort, kThresholdFlagLong, MSyntax::kDouble);
     syntax.addFlag(kZeroInfluencesFlagShort, kZeroInfluencesFlagLong);
 
     syntax.addFlag(kCommandFlagShort, kCommandFlagLong, MSyntax::kString);
@@ -133,6 +138,7 @@ blurSkinCmd::blurSkinCmd()
       depth_(1),
       percentMvt_(1.0),
       indSkinCluster_(0),
+      threshold_(0.0001),
       respectLocks_(true),
       verbose(false) {}
 
@@ -244,46 +250,55 @@ MStatus blurSkinCmd::getAverageWeight(MIntArray vertices, int currentVertex) {
 
     MDoubleArray sumWeigths(nbJoints, 0.0);
     // compute sum weights
-    int currentWeightsLength = currentWeights.length();
     for (i = 0; i < sizeVertices; ++i) {
         for (j = 0; j < nbJoints; ++j) {
             posi = vertices[i] * nbJoints + j;
-            if (posi < currentWeightsLength)
-                sumWeigths[j] += currentWeights[posi];
-            else {
-                MGlobal::displayInfo(MString("currentWeights.length() ") + currentWeightsLength);
-                MGlobal::displayInfo(MString("currentVertex [") + currentVertex +
-                                     MString("] vertAround [") + vertices[i] +
-                                     MString("] nbJoints ") + nbJoints + MString(" posi ") + posi);
-                return MS::kFailure;
+            sumWeigths[j] += currentWeights[posi];
+        }
+    }
+
+    double totalBaseVtxUnlock = 0.0, totalBaseVtxLock = 0.0;
+    ;
+    double totalVtxUnlock = 0.0, totalVtxLock = 0.0;
+
+    for (j = 0; j < nbJoints; j++) {
+        sumWeigths[j] /= sizeVertices;
+
+        // get if jnt is locked
+        bool isLockJnt = lockJoints[j] == 1;
+        // get currentWeight of currentVtx
+        int posiToSet = currentVertex * nbJoints + j;
+        double currentW = currentWeights[posiToSet];
+        double targetW = sumWeigths[j];
+
+        // sum it all
+        if (!isLockJnt) {
+            totalBaseVtxUnlock += currentW;
+            totalVtxUnlock += targetW;
+        } else {
+            totalBaseVtxLock += currentW;
+            totalVtxLock += targetW;
+        }
+    }
+    // setting part ---------------
+    double normalizedValueAvailable = 1.0 - totalBaseVtxLock;
+
+    if (normalizedValueAvailable > 0.0 && totalVtxUnlock > 0.0) {  // we have room to set weights
+        double mult = normalizedValueAvailable / totalVtxUnlock;
+        for (j = 0; j < nbJoints; j++) {
+            bool isLockJnt = lockJoints[j] == 1;
+            int posiToSet = currentVertex * nbJoints + j;
+            double currentW = currentWeights[posiToSet];
+            double targetW = sumWeigths[j];
+
+            if (isLockJnt) {
+                newWeights.set(currentW, posiToSet);
+            } else {
+                targetW *= mult;  // normalement divide par 1, sauf cas lock joints
+                newWeights.set(targetW, posiToSet);
             }
         }
     }
-    double total = 0.0;
-    double totalBaseVtx = 0.0;
-    int assign = 0;
-    for (j = 0; j < nbJoints; j++) {
-        int posi = currentVertex * nbJoints + j;
-        sumWeigths[j] /= sizeVertices;
-
-        total += sumWeigths[j];
-        totalBaseVtx += currentWeights[posi];
-        assign += 1;
-    }
-    if (total > 0. && totalBaseVtx > 0.) {
-        double mult = totalBaseVtx / total;
-        // std::cout << "\n total :\t" <<total ;
-        // std::cout << "\n vtx :" << currentVertex << "\n";
-        for (j = 0; j < nbJoints; j++) {
-            int posiToSet = currentVertex * nbJoints + j;
-            sumWeigths[j] *= mult;  // normalement divide par 1, sauf cas lock joints
-            // std::cout << " " << sumWeigths[j];
-            newWeights.set(sumWeigths[j], posiToSet);
-            // newWeights[posiToSet]=sumWeigths[j];
-        }
-    }
-    // print of result computation
-    verboseSetWeights(currentVertex);
     return MS::kSuccess;
 }
 
@@ -717,6 +732,8 @@ MStatus blurSkinCmd::GatherCommandArguments(const MArgList& args) {
             command_ = kCommandAverage;
         else if (commandStringName == "colors")
             command_ = kCommandSetColors;
+        else if (commandStringName == "prune")
+            command_ = kCommandPruneWeights;
     }
     // overwrites commands
     // --------------------------------------------------------------------------
@@ -732,6 +749,9 @@ MStatus blurSkinCmd::GatherCommandArguments(const MArgList& args) {
 
     if (argData.isFlagSet(kPercentMovementFlagShort))
         percentMvt_ = argData.flagArgumentDouble(kPercentMovementFlagShort, 0, &status);
+
+    if (argData.isFlagSet(kThresholdFlagShort))
+        threshold_ = argData.flagArgumentDouble(kThresholdFlagShort, 0, &status);
 
     if (argData.isFlagSet(kDepthFlagShort))
         depth_ = argData.flagArgumentInt(kDepthFlagShort, 0, &status);
@@ -943,6 +963,7 @@ MStatus blurSkinCmd::doIt(const MArgList& args) {
             }
         }
     }
+
     executeAction();
 
     return MS::kSuccess;
@@ -972,6 +993,8 @@ MStatus blurSkinCmd::executeAction() {
     getListLockJoints();
     // 2 get all weights of vertices
     getAllWeights();
+    // 3 get list of locked vertices
+    getListLockVertices(skinCluster_, lockVertices_);
     if (command_ == kCommandSetColors) {
         if (verbose) MGlobal::displayInfo(MString(" ---- set Colors ----"));
         setColors();
@@ -1005,6 +1028,11 @@ MStatus blurSkinCmd::executeAction() {
         }
         // appendToResult(1.0);
         return MS::kSuccess;
+    } else if (command_ == kCommandPruneWeights) {
+        MGlobal::displayInfo(MString("Prune Weights , threshold is  ") + threshold_ +
+                             MString("currentWeights  length ") + currentWeights.length());
+        doPruneWeight(currentWeights, nbJoints, threshold_);
+        // return MS::kSuccess;
     } else if (command_ == kCommandAverage) {
         MDoubleArray averageWeights;
         int index;
@@ -1035,26 +1063,29 @@ MStatus blurSkinCmd::executeAction() {
             if (verbose) MGlobal::displayInfo(MString("repeat nb :") + r);
             for (int i = 0; i < indicesVertices_.length(); ++i) {
                 index = indicesVertices_[i];
-                storedU = indicesU_[i];
-                storedV = indicesV_[i];
-                if (verbose)
-                    MGlobal::displayInfo(MString("stored are          U :") + storedU +
-                                         MString(" V :") + storedV);
+                if (lockVertices_[index] != 1) {  // if not locked
 
-                if (verbose) stat = printWeigth(index, storedU, storedV);
-                if (command_ != kCommandSmooth) {
-                    addWeights(index);
-                } else {
-                    vertices.clear();
-                    /*
-                    for (int d = 0; d < depth_; d++) { // <= to add one more
-                    CVsAround(storedU, storedV, numCVsInU, numCVsInV, UIsPeriodic, VIsPeriodic,
-                    vertices);
+                    storedU = indicesU_[i];
+                    storedV = indicesV_[i];
+                    if (verbose)
+                        MGlobal::displayInfo(MString("stored are          U :") + storedU +
+                                             MString(" V :") + storedV);
+
+                    if (verbose) stat = printWeigth(index, storedU, storedV);
+                    if (command_ != kCommandSmooth) {
+                        addWeights(index);
+                    } else {
+                        vertices.clear();
+                        /*
+                        for (int d = 0; d < depth_; d++) { // <= to add one more
+                        CVsAround(storedU, storedV, numCVsInU, numCVsInV, UIsPeriodic, VIsPeriodic,
+                        vertices);
+                        }
+                        */
+                        CVsAround(storedU, storedV, numCVsInU_, numCVsInV_, UIsPeriodic_,
+                                  VIsPeriodic_, vertices);
+                        stat = getAverageWeight(vertices, index);
                     }
-                    */
-                    CVsAround(storedU, storedV, numCVsInU_, numCVsInV_, UIsPeriodic_, VIsPeriodic_,
-                              vertices);
-                    stat = getAverageWeight(vertices, index);
                 }
             }
             currentWeights.copy(newWeights);
@@ -1074,43 +1105,46 @@ MStatus blurSkinCmd::executeAction() {
         for (int r = 0; r < repeat_; r++) {
             while (!itVertex.isDone()) {
                 int currentVertex = itVertex.index();
-                if (verbose) MGlobal::displayInfo(MString(" vtx :") + currentVertex);
-                if (verbose) stat = printWeigth(currentVertex);
+                if (lockVertices_[currentVertex] != 1) {  // if not locked
+                    if (verbose) MGlobal::displayInfo(MString(" vtx :") + currentVertex);
+                    if (verbose) stat = printWeigth(currentVertex);
 
-                if (command_ == kCommandSmooth) {
-                    // here depth of get vertices connected
-                    itVertex.getConnectedVertices(vertices);
-                    // check the depth
-                    if (depth_ > 1) {
-                        // init the array
-                        std::unordered_set<int> setOfVerts;
-                        for (unsigned int itVtx = 0; itVtx < vertices.length(); itVtx++)
-                            setOfVerts.insert(vertices[itVtx]);
-                        // for the repeats
-                        std::unordered_set<int> setOfVertsTmp;
-                        for (int d = 1; d < depth_; d++) {  // <= to add one more
-                            setOfVertsTmp.clear();
-                            for (int vtx : setOfVerts) {
-                                itTempVertex.setIndex(vtx, prevIndex);
-                                itTempVertex.getConnectedVertices(repeatVertices);
-                                for (unsigned int itVtx = 0; itVtx < repeatVertices.length();
-                                     itVtx++)
-                                    setOfVertsTmp.insert(repeatVertices[itVtx]);
+                    if (command_ == kCommandSmooth) {
+                        // here depth of get vertices connected
+                        itVertex.getConnectedVertices(vertices);
+                        // check the depth
+                        if (depth_ > 1) {
+                            // init the array
+                            std::unordered_set<int> setOfVerts;
+                            for (unsigned int itVtx = 0; itVtx < vertices.length(); itVtx++) {
+                                setOfVerts.insert(vertices[itVtx]);
                             }
-                            for (int vtx : setOfVertsTmp) setOfVerts.insert(vtx);
+                            // for the repeats
+                            std::unordered_set<int> setOfVertsTmp;
+                            for (int d = 1; d < depth_; d++) {  // <= to add one more
+                                setOfVertsTmp.clear();
+                                for (int vtx : setOfVerts) {
+                                    itTempVertex.setIndex(vtx, prevIndex);
+                                    itTempVertex.getConnectedVertices(repeatVertices);
+                                    for (unsigned int itVtx = 0; itVtx < repeatVertices.length();
+                                         itVtx++)
+                                        setOfVertsTmp.insert(repeatVertices[itVtx]);
+                                }
+                                for (int vtx : setOfVertsTmp) setOfVerts.insert(vtx);
+                            }
+                            // now set the MIntArray
+                            vertices.clear();
+                            for (int vtx : setOfVerts) vertices.append(vtx);
                         }
-                        // now set the MIntArray
-                        vertices.clear();
-                        for (int vtx : setOfVerts) vertices.append(vtx);
-                    }
-                    stat = getAverageWeight(vertices, currentVertex);
-                    if (stat == MS::kFailure) {
-                        MGlobal::displayError(
-                            MString("something is failing, select and try again"));
-                        return MS::kFailure;
-                    }
-                } else
-                    addWeights(currentVertex);
+                        stat = getAverageWeight(vertices, currentVertex);
+                        if (stat == MS::kFailure) {
+                            MGlobal::displayError(
+                                MString("something is failing, select and try again"));
+                            return MS::kFailure;
+                        }
+                    } else
+                        addWeights(currentVertex);
+                }
                 itVertex.next();
             }
             currentWeights.copy(newWeights);

@@ -53,4 +53,5 @@ MStatus editArray(int command, int influence, int nbJoints, MIntArray& lockJoint
 MStatus setAverageWeight(MIntArray& verticesAround, int currentVertex, int indexCurrVert,
                          int nbJoints, MIntArray& lockJoints, MDoubleArray& fullWeightArray,
                          MDoubleArray& theWeights);
+MStatus doPruneWeight(MDoubleArray& theWeights, int nbJoints, double pruneCutWeight);
 #endif

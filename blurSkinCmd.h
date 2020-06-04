@@ -61,7 +61,8 @@ class blurSkinCmd : public MPxCommand {
         kCommandHelp,
         kCommandQuery,
         kCommandSetColors,
-        kCommandGetZeroInfluences
+        kCommandGetZeroInfluences,
+        kCommandPruneWeights
     };
 
     MStatus doIt(const MArgList&);
@@ -125,6 +126,9 @@ class blurSkinCmd : public MPxCommand {
     const static char* kRespectLocksFlagShort;
     const static char* kRespectLocksFlagLong;
 
+    const static char* kThresholdFlagShort;
+    const static char* kThresholdFlagLong;
+
     const static char* kZeroInfluencesFlagShort;
     const static char* kZeroInfluencesFlagLong;
 
@@ -151,6 +155,7 @@ class blurSkinCmd : public MPxCommand {
 
     MIntArray indicesVertices_, indicesU_, indicesV_;
     MFloatArray weightVertices_;
+    MIntArray lockVertices_;
 
     MStringArray listJoints_;
     MDoubleArray listJointsValues_;
@@ -164,7 +169,7 @@ class blurSkinCmd : public MPxCommand {
     bool isNurbsSurface_, isMeshSurface_, isNurbsCurve_, isBezierCurve_;
     bool useSelection = false;
     int depth_, repeat_, indSkinCluster_;
-    double percentMvt_;
+    double percentMvt_, threshold_;
 
     int numCVsInV_, numCVsInU_;
     int UDeg_, VDeg_;

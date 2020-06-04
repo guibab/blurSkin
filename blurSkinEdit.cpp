@@ -919,6 +919,7 @@ MStatus blurSkinDisplay::refreshColors(MIntArray& editVertsIndices, MColorArray&
 
     for (int i = 0; i < editVertsIndices.length(); ++i) {
         int theVert = editVertsIndices[i];
+
         MColor multiColor, soloColor;
         bool isVtxLocked = this->lockVertices[theVert] == 1;
         for (int j = 0; j < this->nbJoints; ++j) {  // for each joint
