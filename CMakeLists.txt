@@ -4,17 +4,7 @@ project(brSkinBrush)
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 SET(MAYA_VERSION 2020 CACHE STRING "Maya version number")
 
-SET(SOURCE_FILES 
-    "src/blurSkinPlugin.cpp" 
-    "src/blurSkinCmd.cpp" 
-    "src/blurSkinCmd.h"
-    "src/blurSkinEdit.cpp"
-    "src/blurSkinEdit.h"
-    "src/functions.cpp"    
-    "src/functions.h"
-    "src/pointsDisplay.cpp"
-    "src/pointsDisplay.h"
-)
+file(GLOB SOURCE_FILES "src/*.*")
 
 FIND_PACKAGE(OpenGL REQUIRED)
 FIND_PACKAGE(Maya REQUIRED)
