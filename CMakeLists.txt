@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.2.2)
-project(brSkinBrush)
+project(blurSkin)
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 SET(MAYA_VERSION 2020 CACHE STRING "Maya version number")
